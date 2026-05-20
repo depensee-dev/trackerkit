@@ -5,9 +5,9 @@ description = "Unified async client library for Jira, Yandex Tracker, and Asana 
 authors = ["Mikhail Stasyshin <m.stasyshin@gmail.com>"]
 readme = "README.md"
 license = "MIT"
-homepage = "https://github.com/stasyshin/trackerkit"
-repository = "https://github.com/stasyshin/trackerkit"
-documentation = "https://github.com/stasyshin/trackerkit#readme"
+homepage = "https://github.com/depensee-dev/trackerkit"
+repository = "https://github.com/depensee-dev/trackerkit"
+documentation = "https://github.com/depensee-dev/trackerkit#readme"
 keywords = ["jira", "yandex-tracker", "asana", "task-tracker", "async", "integration"]
 classifiers = [
     "Development Status :: 3 - Alpha",
