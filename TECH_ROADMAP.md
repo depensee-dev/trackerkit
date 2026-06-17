@@ -1,13 +1,14 @@
 # Technical Roadmap
 
 Engineering-side TODO list for `trackerkit`. Complements `ROADMAP.md` (which
-tracks product capabilities and provider coverage) by listing technical debt,
-correctness/perf bugs, tooling gaps, and architectural decisions.
+tracks product capabilities, release targets 0.3–0.5, and ChainForge-driven
+feature priorities) by listing technical debt, correctness/perf bugs, tooling
+gaps, and architectural decisions.
 
 ## Legend
 
 Priority:
-- 🔴 Critical — blocks safe day-to-day work or stabilization to 0.2.0.
+- 🔴 Critical — blocks safe day-to-day work or stabilization to 0.3.0.
 - 🟠 Substantial — visible correctness, performance, or encapsulation issue.
 - 🟡 Polish — DX improvement, tooling, or future-proofing.
 
@@ -19,6 +20,23 @@ Status:
 
 Each item points to the relevant file paths so the work can start without
 re-discovering the codebase.
+
+---
+
+## Product alignment (`ROADMAP.md` 0.3–0.5)
+
+Map product milestones to engineering prep. Full checklists live in `ROADMAP.md`.
+
+| Product (ROADMAP) | Suggested engineering first |
+| --- | --- |
+| **0.3.0** errors + rate limit | New `domain/errors.py` types; shared HTTP/limiter layer or transport wrappers (Jira/Yandex) |
+| **0.3.0** `from_config()` | ARCH-1, DEC-1 (`ProviderAuthConfig` entry, `extra="ignore"`) |
+| **0.3.0** users + webhooks | New capability modules under `contracts/` + provider packages |
+| **0.3.0** relation stability | TEST-2, TEST-5, DEC-2 |
+| **0.4.0** custom fields + transitions | Jira/Yandex mappers + transport; expose existing Jira `transition_issue` |
+| **0.4.0** comments | `CommentCapability` implementations |
+| **0.5.0** bulk + OAuth | Transport batching; `AuthProvider` without facade provider branches |
+| **0.5.0** capability matrix | POL-6, TEST-5 contract parametrization |
 
 ---
 
@@ -469,7 +487,7 @@ parameters. Three options live in chat history:
 
 - A. Minimal fix — `extra="ignore"` in Yandex/Asana auth configs (covered by ARCH-1).
 - B. Additive — add `TrackerClient.from_config(config: ProviderAuthConfig)` next to the existing constructor.
-- C. Breaking — single constructor `TrackerClient(auth_config: ProviderAuthConfig, relation_mapping=None)`, bump to 0.2.0.
+- C. Breaking — single constructor `TrackerClient(auth_config: ProviderAuthConfig, relation_mapping=None)`, bump to 0.3.0.
 
 - [?] Pick A, B, or C before reworking the facade beyond ARCH-1.
 
@@ -493,16 +511,26 @@ Options from chat history:
 
 ## Suggested Execution Order
 
-A defensible order that minimizes rework:
+### Phase A — close 0.3.x maintenance
 
-1. SEC-1 (must precede anything else; do today).
-2. TEST-1 + TOOL-1 + TOOL-2 (set up the runway).
-3. TEST-2, TEST-3, TEST-4, TEST-5 (lock current behavior before refactors).
-4. PERF-1 (the connection-guard fix lands cheaply once tests exist).
-5. ARCH-1 (drops the `if Provider.JIRA` branch; small, safe).
-6. ARCH-3, ARCH-4 (encapsulation cleanup).
-7. CORR-1..3 and PERF-2..4 (stability and perf passes).
-8. ARCH-2 (Jira private SDK API — needs care, test coverage from step 3 helps).
-9. POL-* in parallel as time allows.
-10. TOOL-3, TOOL-4 (pre-commit and CI; can land any time after step 2).
-11. Resolve DEC-1 and DEC-2 before targeting 0.2.0.
+1. SEC-1 (manual token hygiene).
+2. TEST-2, TEST-3, TEST-4; finish TEST-5 contract skeleton.
+3. ARCH-1, ARCH-3, ARCH-4; CORR-1..3, PERF-2..4 where still open.
+4. TOOL-3, TOOL-4 (CI + pre-commit).
+5. Resolve DEC-1 (minimal: `from_config` + `extra="ignore"`) and DEC-2 before 0.3.0 feature work.
+
+PERF-1 and TEST-1 are done.
+
+### Phase B — ship 0.3.0 (see `ROADMAP.md`)
+
+1. Structured errors + `RateLimitError`.
+2. Shared rate limiter on provider transports.
+3. `TrackerClient.from_config()`.
+4. `UserCapability` + `WebhookCapability` (Jira, Yandex Tracker).
+5. Relation tests locked under DEC-2.
+
+### Phase C — 0.4.0 / 0.5.0
+
+1. Custom fields + Jira transitions API (0.4.0).
+2. Comments (0.4.0).
+3. Bulk, OAuth, token hook, POL-6 capability matrix (0.5.0).

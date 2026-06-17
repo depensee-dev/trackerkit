@@ -1,32 +1,37 @@
-[tool.poetry]
+[project]
 name = "trackerkit"
-version = "0.2.0"
+version = "0.3.0"
 description = "Unified async client library for Jira, Yandex Tracker, and Asana integrations."
-authors = ["Mikhail Stasyshin <m.stasyshin@gmail.com>"]
 readme = "README.md"
+requires-python = ">=3.12,<4.0"
 license = "MIT"
-homepage = "https://github.com/depensee-dev/trackerkit"
-repository = "https://github.com/depensee-dev/trackerkit"
-documentation = "https://github.com/depensee-dev/trackerkit#readme"
+authors = [
+    { name = "Mikhail Stasyshin", email = "m.stasyshin@gmail.com" },
+]
 keywords = ["jira", "yandex-tracker", "asana", "task-tracker", "async", "integration"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-packages = [{ include = "trackerkit", from = "src" }]
+dependencies = [
+    "pydantic>=2.12.5,<3.0.0",
+    "jira>=3.10.5,<4.0.0",
+    "yandex-tracker-client>=2.10,<3.0",
+    "asana>=5.2.4,<6.0.0",
+]
 
-[tool.poetry.dependencies]
-python = "^3.12"
-pydantic = "^2.12.5"
-jira = "^3.10.5"
-yandex-tracker-client = "^2.10"
-asana = "^5.2.4"
+[project.urls]
+Homepage = "https://github.com/depensee-dev/trackerkit"
+Repository = "https://github.com/depensee-dev/trackerkit"
+Documentation = "https://github.com/depensee-dev/trackerkit#readme"
+
+[tool.poetry]
+packages = [{ include = "trackerkit", from = "src" }]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "*"
@@ -34,7 +39,7 @@ pytest-asyncio = "*"
 ruff = "*"
 
 [build-system]
-requires = ["poetry-core>=1.9.0"]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.ruff]

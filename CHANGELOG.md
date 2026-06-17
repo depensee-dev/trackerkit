@@ -6,7 +6,7 @@ The format is based on Keep a Changelog, and the project uses Semantic Versionin
 
 ## [Unreleased]
 
-## [0.2.0] - 2026-04-26
+## [0.3.0] - 2026-04-26
 
 Stabilization release on top of `0.1.1`: faster, stricter, and significantly better tested.
 

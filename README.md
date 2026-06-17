@@ -18,7 +18,7 @@ pip install trackerkit
 Install from a Git tag:
 
 ```bash
-pip install "git+https://github.com/depensee-dev/trackerkit.git@v0.2.1"
+pip install "git+https://github.com/depensee-dev/trackerkit.git@v0.3.0"
 ```
 
 Install from the `main` branch:
@@ -162,7 +162,8 @@ client = TrackerClient(
 - `docs/projects.md` - workspaces and project methods.
 - `docs/tasks.md` - task methods and task models.
 - `docs/relations.md` - relation semantics, mapping config, and CRUD behavior.
-- `ROADMAP.md` - current status, planned work, and future provider candidates.
+- `ROADMAP.md` - status, ChainForge-driven priorities, release targets 0.3–0.5.
+- `TECH_ROADMAP.md` - engineering debt, tests, and execution order.
 - `THIRD_PARTY_LICENSES.md` - direct runtime dependency license summary.
 
 ## Examples
@@ -269,4 +270,4 @@ Examples load variables with this priority:
 3. `.env.example`
 
 ## Roadmap
-See `ROADMAP.md` for current status, planned work, and future provider candidates.
+See `ROADMAP.md` for release plan (0.3 sync, 0.4 PERT data, 0.5 scale/auth) and `TECH_ROADMAP.md` for engineering tasks.
