@@ -170,6 +170,9 @@ class TrackerClient:
     async def list_tasks(self, query: TaskQuery | None = None) -> list[Task]:
         return await self._execute(lambda: self._client.list_tasks(query))
 
+    async def count_tasks(self, query: TaskQuery | None = None) -> int:
+        return await self._execute(lambda: self._client.count_tasks(query))
+
     async def create_task(self, payload: CreateTaskInput) -> Task:
         return await self._execute(lambda: self._client.create_task(payload))
 

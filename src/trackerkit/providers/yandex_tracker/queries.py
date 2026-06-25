@@ -6,7 +6,6 @@ class YandexTrackerQueryPolicy:
         effective_query = query or TaskQuery()
         return {
             "query": self._build_query_string(effective_query),
-            "queue": effective_query.project_id,
         }
 
     @staticmethod
@@ -18,6 +17,12 @@ class YandexTrackerQueryPolicy:
 
     def _build_query_string(self, query: TaskQuery) -> str | None:
         clauses: list[str] = []
+        if query.project_id is not None:
+            # Filter by queue via the query DSL. The SDK's top-level ``queue``
+            # kwarg is NOT honored by ``/issues/_search`` and ``/issues/_count``
+            # (they return issues across all queues), so encoding it here is the
+            # only reliable way to scope both listing and counting to one queue.
+            clauses.append(f"Queue: {self._quote(query.project_id)}")
         if query.assignee_id is not None:
             clauses.append(f"Assignee: {self._quote(query.assignee_id)}")
         if query.status_id is not None:
@@ -36,6 +41,13 @@ class YandexTrackerQueryPolicy:
         # provider cannot honor a particular field (e.g. unsupported status).
         effective_query = query or TaskQuery()
         filtered = tasks
+
+        if effective_query.project_id is not None:
+            filtered = [
+                task
+                for task in filtered
+                if task.project_id == effective_query.project_id
+            ]
 
         if effective_query.assignee_id is not None:
             filtered = [

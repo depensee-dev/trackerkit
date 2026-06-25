@@ -54,6 +54,10 @@ class JiraClient(BaseTaskTrackerAdapter):
         issues = await self._transport.search_issues(jql, fields)
         return [self._mapper.to_task(issue) for issue in issues]
 
+    async def count_tasks(self, query: TaskQuery | None = None) -> int:
+        jql, _ = self._queries.build_task_search(query)
+        return await self._transport.count_issues(jql)
+
     async def create_task(self, payload: CreateTaskInput) -> Task:
         if payload.project_id is None:
             raise ProviderCapabilityError("Jira task creation requires project_id.")

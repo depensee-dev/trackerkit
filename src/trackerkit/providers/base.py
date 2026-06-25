@@ -5,6 +5,7 @@ from trackerkit.domain.models import (
     CreateCommentInput,
     CreateRelationInput,
     Relation,
+    TaskQuery,
     UpdateRelationInput,
     User,
 )
@@ -19,6 +20,9 @@ class BaseTaskTrackerAdapter(TaskTrackerClient):
         return ProviderCapabilityError(
             f"{self.provider_name} does not support '{operation}' in this adapter."
         )
+
+    async def count_tasks(self, query: TaskQuery | None = None) -> int:
+        raise self._unsupported("count_tasks")
 
     async def list_users(self) -> list[User]:
         raise self._unsupported("list_users")

@@ -75,6 +75,22 @@ class JiraTransport:
             fields,
         )
 
+    async def count_issues(self, jql: str) -> int:
+        # ``maxResults=0`` returns no issues but the response still carries the
+        # total; ``json_result=True`` exposes it as a plain dict, so we avoid
+        # fetching (and mapping) any issue just to learn the count.
+        result = await self._run(
+            self._get_client().search_issues,
+            jql,
+            startAt=0,
+            maxResults=0,
+            fields="id",
+            json_result=True,
+        )
+        if isinstance(result, dict):
+            return int(result.get("total", 0))
+        return int(getattr(result, "total", 0) or 0)
+
     async def create_issue(self, fields: dict[str, Any]) -> Any:
         return await self._run(self._get_client().create_issue, fields=fields)
 

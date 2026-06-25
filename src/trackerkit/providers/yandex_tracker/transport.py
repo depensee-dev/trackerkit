@@ -67,7 +67,24 @@ class YandexTrackerTransport:
         return await self._run(self._get_client().issues.get, task_id)
 
     async def find_issues(self, query: str | None, per_page: int, **kwargs) -> list[Any]:
-        return await self._run(self._get_client().issues.find, query, per_page, **kwargs)
+        # ``issues.find`` returns a lazy ``PaginatedList``: it has no ``__len__``
+        # and performs blocking HTTP requests while iterated to follow ``next``
+        # links. Materialize it into a real list inside the worker thread so the
+        # paging I/O stays off the event loop and callers get a plain ``list``.
+        def _materialize() -> list[Any]:
+            return list(self._get_client().issues.find(query, per_page, **kwargs))
+
+        return await self._run(_materialize)
+
+    async def count_issues(self, query: str | None, **kwargs) -> int:
+        # Uses Tracker's dedicated ``/issues/_count`` endpoint (a single cheap
+        # request that returns just the number), instead of paging the issues.
+        def _count() -> int:
+            return int(
+                self._get_client().issues.find(query, count_only=True, **kwargs)
+            )
+
+        return await self._run(_count)
 
     async def create_issue(self, data: dict[str, Any]) -> Any:
         return await self._run(self._get_client().issues.create, **data)

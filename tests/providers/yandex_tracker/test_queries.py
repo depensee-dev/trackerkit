@@ -9,14 +9,23 @@ from trackerkit.providers.yandex_tracker.queries import YandexTrackerQueryPolicy
 def test_build_search_params_returns_none_query_when_no_filters() -> None:
     policy = YandexTrackerQueryPolicy()
     params = policy.build_issue_search_params(None)
-    assert params == {"query": None, "queue": None}
+    assert params == {"query": None}
 
 
-def test_build_search_params_includes_queue_only_when_no_filters() -> None:
+def test_build_search_params_scopes_queue_via_query_dsl() -> None:
+    # The SDK's top-level ``queue`` kwarg is ignored by the search/count
+    # endpoints, so the queue must be encoded in the query string instead.
     policy = YandexTrackerQueryPolicy()
     params = policy.build_issue_search_params(TaskQuery(project_id="MY"))
-    assert params["queue"] == "MY"
-    assert params["query"] is None
+    assert params["query"] == 'Queue: "MY"'
+
+
+def test_build_search_params_combines_queue_with_other_filters() -> None:
+    policy = YandexTrackerQueryPolicy()
+    params = policy.build_issue_search_params(
+        TaskQuery(project_id="MY", assignee_id="alice")
+    )
+    assert params["query"] == 'Queue: "MY" Assignee: "alice"'
 
 
 def test_build_search_params_pushes_assignee_to_server() -> None:

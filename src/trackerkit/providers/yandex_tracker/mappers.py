@@ -60,28 +60,44 @@ class YandexTrackerMapper:
             return parsed.replace(tzinfo=UTC)
         return parsed
 
+    def _short_value(self, value: Any) -> dict[str, Any]:
+        # Read only the already-loaded ("short") representation of a Yandex SDK
+        # Reference/Resource. ``as_dict()`` returns the payload that arrived with
+        # the search response and never triggers a lazy per-object dereference.
+        # Touching a missing attribute (e.g. ``uid``/``email``) on a Reference
+        # would otherwise fetch the full user one HTTP call at a time — an N+1
+        # storm when mapping a whole page of issues.
+        as_dict = getattr(value, "as_dict", None)
+        if callable(as_dict):
+            data = as_dict()
+            if isinstance(data, dict):
+                return data
+        keys = ("uid", "id", "login", "display", "firstName", "email")
+        return {key: getattr(value, key, None) for key in keys}
+
     def _to_user(self, value: Any) -> User | None:
         if value is None:
             return None
+        data = self._short_value(value)
         user_id = (
-            getattr(value, "uid", None)
-            or getattr(value, "id", None)
-            or getattr(value, "login", None)
-            or getattr(value, "display", None)
+            data.get("uid")
+            or data.get("id")
+            or data.get("login")
+            or data.get("display")
         )
         if user_id is None:
             return None
         display_name = (
-            getattr(value, "display", None)
-            or getattr(value, "login", None)
-            or getattr(value, "firstName", None)
-            or getattr(value, "id", None)
+            data.get("display")
+            or data.get("login")
+            or data.get("firstName")
+            or data.get("id")
             or user_id
         )
         return User(
             id=str(user_id),
             display_name=str(display_name),
-            email=getattr(value, "email", None),
+            email=data.get("email"),
         )
 
     def _to_status(self, value: Any) -> Status | None:

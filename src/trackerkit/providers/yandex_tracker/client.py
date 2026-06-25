@@ -57,24 +57,23 @@ class YandexTrackerClient(BaseTaskTrackerAdapter):
 
     async def list_tasks(self, query: TaskQuery | None = None) -> list[Task]:
         params = self._queries.build_issue_search_params(query)
-        issues: list[Any] = []
-        page = 1
-        per_page = 100
-        while True:
-            batch = await self._transport.find_issues(
-                params["query"],
-                per_page,
-                queue=params["queue"],
-                page=page,
-            )
-            if not batch:
-                break
-            issues.extend(batch)
-            if len(batch) < per_page:
-                break
-            page += 1
+        # Queue scoping is encoded in the query string (``Queue: KEY``) because
+        # the SDK's top-level ``queue`` kwarg is ignored by the search endpoint.
+        #
+        # The Yandex SDK returns a ``PaginatedList`` that transparently follows
+        # ``next`` links while it is iterated, so a single materialized fetch
+        # already yields every matching issue across all pages. The transport
+        # consumes that iterator inside a worker thread (see ``find_issues``),
+        # which is why we must not page manually or call ``len()`` here.
+        issues = await self._transport.find_issues(params["query"], 100)
         tasks = [self._mapper.to_task(issue) for issue in issues]
         return self._queries.filter_tasks(tasks, query)
+
+    async def count_tasks(self, query: TaskQuery | None = None) -> int:
+        params = self._queries.build_issue_search_params(query)
+        # See ``list_tasks``: the queue is part of ``params["query"]``; the
+        # ``/issues/_count`` endpoint likewise ignores a top-level ``queue``.
+        return await self._transport.count_issues(params["query"])
 
     async def create_task(self, payload: CreateTaskInput) -> Task:
         if payload.project_id is None:
