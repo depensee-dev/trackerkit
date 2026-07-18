@@ -1,9 +1,9 @@
 [project]
 name = "trackerkit"
-version = "0.3.1"
+version = "0.3.2"
 description = "Unified async client library for Jira, Yandex Tracker, and Asana integrations."
 readme = "README.md"
-requires-python = ">=3.12,<4.0"
+requires-python = ">=3.12,<3.15"
 license = "MIT"
 authors = [
     { name = "Mikhail Stasyshin", email = "m.stasyshin@gmail.com" },

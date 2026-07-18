@@ -133,7 +133,11 @@ class YandexTrackerRelationPolicy:
                 return True
             if normalized_label == self._normalize(mapping.inward_value):
                 return False
-        return direction == "outward" or relation_type is RelationType.RELATES
+        if relation_type is RelationType.RELATES:
+            return True
+        if relation_type is RelationType.BLOCKS:
+            return direction == "inward"
+        return direction == "outward"
 
     def _find_mapping_by_label(
         self,

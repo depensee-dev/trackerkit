@@ -4,11 +4,36 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and the project uses Semantic Versioning.
 
+PyPI releases start at `0.3.0`; earlier `0.1.x` / `0.2.x` tags predate publication and are intentionally omitted here.
+
 ## [Unreleased]
 
-## [0.3.0] - 2026-04-26
+## [0.3.2] - 2026-07-18
+### Fixed
+- Yandex Tracker `list_relations`: fixed inverted direction of `BLOCKS` relations on trackers that return **localized** link labels (e.g. Russian "Зависит от" / "Блокирующая задача"). Such labels never match the configured English relationship values (`is dependent by` / `depends on`), so direction fell back to `direction == "outward"`, which put the *dependent* task as `source_task_id` instead of the *blocker*. The relation is now correctly directed blocker → blocked. Verified against live queue data (`ZIR-27` blocks `ZIR-81`).
 
-Stabilization release on top of `0.1.1`: faster, stricter, and significantly better tested.
+### Notes
+- Only the **read** path (`list_relations`) is affected. Relation **creation** (`create_relation` / `get_create_relationship`) was already correct and is unchanged; `YandexTrackerRelationMappingConfig` values are unchanged, so no configuration migration is required.
+- `RELATES` and `CONTAINS` direction handling is unchanged.
+
+## [0.3.1] - 2026-06-25
+
+Bug-fix release focused on correct queue-scoped task retrieval and cheap task counting.
+
+### Added
+- `count_tasks(query)` across the stack: `TrackerClient.count_tasks`, the opt-in `TaskReadCapability.count_tasks` contract, and provider adapters — Jira via `search` with `maxResults=0` (reads `total` without mapping any issue) and Yandex Tracker via the dedicated `/issues/_count` endpoint.
+
+### Fixed
+- Yandex Tracker `list_tasks`: queue scoping is now encoded in the query DSL (`Queue: "KEY"`) instead of the SDK's top-level `queue` kwarg, which `/issues/_search` and `/issues/_count` ignore — previously tasks leaked across all queues. A client-side `project_id` filter was added as a safety net.
+- Yandex Tracker `list_tasks`: removed manual paging that called `len()` on the SDK's lazy `PaginatedList` (which has no `__len__`); the transport now materializes the paginated iterator inside the worker thread.
+- Yandex Tracker user mapping: read the already-loaded "short" representation (`as_dict()`) instead of lazy attribute access, avoiding an N+1 request storm when mapping a whole page of issues.
+
+### Tests
+- Updated Yandex query-policy tests for DSL-based queue scoping and combined filters.
+
+## [0.3.0] - 2026-06-17
+
+Stabilization release: faster, stricter, and significantly better tested.
 
 ### Breaking
 - `AsanaClient.list_tasks` now requires `TaskQuery.project_id` (raises `ProviderCapabilityError` otherwise) — no more silent fan-out over all workspaces × projects.
@@ -36,25 +61,3 @@ Stabilization release on top of `0.1.1`: faster, stricter, and significantly bet
 ### Docs
 - New `TECH_ROADMAP.md`.
 - Updated `README.md`, `docs/auth.md`, `docs/projects.md`, `docs/tasks.md`.
-
-## [0.1.1] - 2026-04-26
-### Changed
-- Renamed distribution package from `depensee-tracker-client` to `trackerkit`.
-- Renamed Python import namespace from `depensee_tracker_client` to `trackerkit`.
-- Updated README, docs, examples, and package metadata for the new name.
-
-### Added
-- MIT license.
-- `ROADMAP.md`.
-- `THIRD_PARTY_LICENSES.md` (third-party runtime dependency license summary).
-- Clarified relation mapping configuration and provider capability documentation.
-
-## [0.1.0] - 2026-04-15
-### Added
-- initial public project structure for the unified async tracker client;
-- provider adapters for Jira, Yandex Tracker, and Asana;
-- shared contracts and domain models for tasks, projects, workspaces, users, comments, and relations;
-- example scripts and documentation for auth, projects, and tasks.
-
-### Changed
-- package name finalized as `trackerkit`.

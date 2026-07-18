@@ -714,5 +714,5 @@ six = ">=1.9"
 
 [metadata]
 lock-version = "2.1"
-python-versions = ">=3.12,<4.0"
-content-hash = "db076fb15fc3a86a86366b274708fae6010af80fb307a76bc0a7d5d5da90f0c7"
+python-versions = ">=3.12,<3.15"
+content-hash = "aa0cb1fd8ea83d987ed450fe68ebf6efb9db4a7b34ddf87fb58aab2db1e541f5"
