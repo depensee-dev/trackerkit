@@ -24,7 +24,7 @@ from trackerkit.tracker_client import TrackerClient
 
 def _build_dummy_client() -> TrackerClient:
     return TrackerClient(
-        provider=Provider.ASANA,
+        provider=Provider.GITHUB,
         auth_data={"access_token": "secret"},
     )
 
@@ -36,7 +36,7 @@ def _make_diagnostic(
     message: str | None = None,
 ) -> ConnectionDiagnostic:
     return ConnectionDiagnostic(
-        provider=Provider.ASANA,
+        provider=Provider.GITHUB,
         is_connected=is_connected,
         error_kind=error_kind,
         message=message,
@@ -110,11 +110,9 @@ class TestBuildConnectionError:
 
     def test_unknown_kind_uses_default_message(self) -> None:
         client = _build_dummy_client()
-        err = client._build_connection_error(
-            _make_diagnostic(is_connected=False, error_kind=None)
-        )
+        err = client._build_connection_error(_make_diagnostic(is_connected=False, error_kind=None))
         assert isinstance(err, ProviderError)
-        assert "asana" in str(err).lower()
+        assert "github" in str(err).lower()
 
 
 class TestConnectionTtlCache:
@@ -134,7 +132,7 @@ class TestConnectionTtlCache:
     @pytest.mark.asyncio
     async def test_verify_each_call_disables_cache(self) -> None:
         client = TrackerClient(
-            provider=Provider.ASANA,
+            provider=Provider.GITHUB,
             auth_data={"access_token": "secret"},
             verify_each_call=True,
         )
@@ -149,7 +147,7 @@ class TestConnectionTtlCache:
     @pytest.mark.asyncio
     async def test_zero_ttl_disables_cache(self) -> None:
         client = TrackerClient(
-            provider=Provider.ASANA,
+            provider=Provider.GITHUB,
             auth_data={"access_token": "secret"},
             connection_check_ttl=0.0,
         )
@@ -199,7 +197,7 @@ class TestInitValidation:
     def test_negative_timeout_raises_configuration_error(self) -> None:
         with pytest.raises(ConfigurationError):
             TrackerClient(
-                provider=Provider.ASANA,
+                provider=Provider.GITHUB,
                 auth_data={"access_token": "secret"},
                 connection_timeout=0,
             )
@@ -207,7 +205,7 @@ class TestInitValidation:
     def test_negative_retries_raises_configuration_error(self) -> None:
         with pytest.raises(ConfigurationError):
             TrackerClient(
-                provider=Provider.ASANA,
+                provider=Provider.GITHUB,
                 auth_data={"access_token": "secret"},
                 max_retries=-1,
             )
@@ -215,7 +213,7 @@ class TestInitValidation:
     def test_negative_ttl_raises_configuration_error(self) -> None:
         with pytest.raises(ConfigurationError):
             TrackerClient(
-                provider=Provider.ASANA,
+                provider=Provider.GITHUB,
                 auth_data={"access_token": "secret"},
                 connection_check_ttl=-1,
             )

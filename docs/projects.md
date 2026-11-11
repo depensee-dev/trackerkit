@@ -18,10 +18,9 @@ await client.delete_project(project_id: str) -> None
 - `key`: `str | None`
 
 #### Workspace.id by provider
-- `Jira`: synthetic value of the form ``jira:<host>`` (e.g. ``jira:your-domain.atlassian.net``).
-  This is **not** a Jira API endpoint; treat it as an opaque identifier for routing in your service.
-- `Yandex Tracker`: organization id (``cloud_org_id`` or ``org_id``) or the literal ``yandex-tracker``.
-- `Asana`: native Asana workspace ``gid``.
+- `Jira`: synthetic value of the form `jira:<host>` (e.g. `jira:your-domain.atlassian.net`). This is not a Jira API endpoint; treat it as an opaque identifier for routing in your service.
+- `Yandex Tracker`: organization id (`cloud_org_id` or `org_id`) or the literal `yandex-tracker`.
+- `GitHub`: `github:user:<id>` for a user account or `github:org:<id>` for an organization. `Workspace.key` is the account login.
 
 ### Project
 - `id`: `str`
@@ -44,78 +43,52 @@ await client.delete_project(project_id: str) -> None
 ## Notes
 - `Workspace` is a top-level container above projects.
 - `workspace_id` in `list_projects()` can be omitted.
-- provider-specific limitations should raise `ProviderCapabilityError`.
-- `Jira`, `Yandex Tracker`, and `Asana` implement this section of the contract.
+- provider-specific limitations raise `ProviderCapabilityError`.
+- `Jira`, `Yandex Tracker`, and `GitHub` implement workspace and project reads.
 - In `Yandex Tracker`, official documentation distinguishes `queue` and native `project` as separate entities.
 - In `Yandex Tracker`, every issue belongs to a queue, while native `project` is a higher-level entity that can include queues.
 - In `trackerkit`, shared `Project` is mapped to the provider entity that acts as the main operational task container.
-- For `Yandex Tracker`, this means shared `Project` is mapped to `queue`.
-- For `Yandex Tracker`, `Project.id` and `Project.key` are based on the queue key.
-- For `Yandex Tracker`, `create_project()` creates a queue under the hood.
-- For `Yandex Tracker`, `update_project()` and `delete_project()` update and delete the same queue.
+- For `Yandex Tracker`, this means shared `Project` is mapped to `queue`; project writes create, update, and delete queues.
+- For `GitHub`, shared `Project` is mapped to a repository. `Project.id` is the stable numeric repository ID, while `Project.key` is `owner/repository`.
+- `GitHub.list_projects()` lists repositories visible to the user token, including owned, collaborator, and organization-member repositories.
+- GitHub project create/update/delete operations would mutate repositories and are intentionally unsupported in the current adapter.
 - The public library API is async, while some provider transports may wrap sync SDKs internally.
 
 ## Canonical Mapping
 The shared `Project` model represents the main operational container for tasks in each provider.
 This is a canonical integration decision made on top of provider source models, not a claim that provider-native names are identical.
 
-| Shared entity | Jira | Yandex Tracker | Asana |
+| Shared entity | Jira | Yandex Tracker | GitHub |
 | --- | --- | --- | --- |
-| `Workspace` | integration-level container for one Jira site / instance | organization context | Asana workspace |
-| `Project` | Jira project | queue | Asana project |
+| `Workspace` | integration-level container for one Jira site / instance | organization context | user account or organization |
+| `Project` | Jira project | queue | repository |
 
 ### Provider notes
 - `Jira`: `Project` maps to Jira project.
 - `Yandex Tracker`: `Project` maps to queue, not to the native Yandex Tracker `project` entity.
-- `Asana`: `Project` maps to Asana project.
-
-## Source Grounding
-- Jira documentation describes a project/space as a configurable container for work items.
-- Yandex Tracker documentation states that every issue belongs to a queue and separately documents native `project` with queues as an expandable field.
-- Asana documentation describes a project as a prioritized list of tasks or a board inside a workspace or organization.
+- `GitHub`: `Project` maps to repository, not GitHub Projects. A GitHub issue has exactly one repository but may be added to multiple GitHub Projects boards.
 
 ## Sources
 - Jira: [Projects / spaces overview](https://www.atlassian.com/software/jira/guides/projects/overview)
 - Yandex Tracker: [Queue introduction](https://yandex.ru/support/tracker/en/queue-intro)
 - Yandex Tracker: [Get project parameters](https://yandex.ru/support/tracker/en/api-ref/projects/get-project)
-- Asana: [Projects reference](https://developers.asana.com/reference/projects)
+- GitHub: [Repositories REST API](https://docs.github.com/en/rest/repos/repos)
 
 ## Entity Relationship
 - `Workspace` contains many `Project`.
 - `Project` contains many `Task`.
-- In `Yandex Tracker`, this means: organization/workspace -> queue -> issues.
+- In `Yandex Tracker`: organization/workspace -> queue -> issues.
+- In `GitHub`: user or organization -> repository -> issues.
 
 ## Example
 ```python
-from trackerkit import (
-    CreateProjectInput,
-    TrackerClient,
-    UpdateProjectInput,
-)
+from trackerkit import TrackerClient
 
-client = TrackerClient(
-    provider="jira",
-    auth_data={
-        "base_url": "https://your-domain.atlassian.net",
-        "access_token": "secret",
-    },
-)
-
-workspaces = await client.list_workspaces()
-projects = await client.list_projects()
-
-project = await client.create_project(
-    CreateProjectInput(
-        name="Platform",
-        key="PLATFORM",
-        description="Platform team project",
-    )
-)
-
-updated = await client.update_project(
-    project.id,
-    UpdateProjectInput(description="Updated description"),
-)
-
-await client.delete_project(updated.id)
+async with TrackerClient(
+    provider="github",
+    auth_data={"access_token": "secret"},
+) as client:
+    workspaces = await client.list_workspaces()
+    projects = await client.list_projects()
+    project = await client.get_project(projects[0].id)
 ```

@@ -1,7 +1,7 @@
 """Public package entrypoint for trackerkit."""
 
 from .contracts.auth import (
-    AsanaAuthConfig,
+    GitHubAuthConfig,
     JiraAuthConfig,
     ProviderAuthConfig,
     YandexTrackerAuthConfig,
@@ -42,7 +42,6 @@ from .domain import (
 from .tracker_client import TrackerClient
 
 __all__ = [
-    "AsanaAuthConfig",
     "AuthenticationError",
     "Comment",
     "ConfigurationError",
@@ -52,6 +51,7 @@ __all__ = [
     "CreateProjectInput",
     "CreateRelationInput",
     "CreateTaskInput",
+    "GitHubAuthConfig",
     "JiraAuthConfig",
     "JiraContainsMode",
     "JiraLinkTypeMapping",

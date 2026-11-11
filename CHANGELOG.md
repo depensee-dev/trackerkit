@@ -6,7 +6,32 @@ The format is based on Keep a Changelog, and the project uses Semantic Versionin
 
 PyPI releases start at `0.3.0`; earlier `0.1.x` / `0.2.x` tags predate publication and are intentionally omitted here.
 
+Entries below are historical and are not rewritten. The Asana provider
+mentioned in `0.3.0` was removed in `0.4.0`.
+
 ## [Unreleased]
+
+## [0.4.0] - 2026-11-11
+
+### Breaking
+- Removed the deprecated Asana provider, its auth config, example, and runtime dependency. Use `trackerkit>=0.3.0,<0.4.0` if Asana support is still required.
+
+### Added
+- New `github` provider backed by an asynchronous REST transport: workspaces, repository-backed projects, issue read/create/update, task counting, and relation CRUD.
+- GitHub relations use native related issues (`relates`), issue dependencies (`blocks`), and sub-issues (`contains`).
+- Stable, versioned GitHub task and relation handles that carry the repository and issue coordinates required by different GitHub APIs.
+- GitHub pagination, pull-request filtering, bounded concurrency, and normalized authentication/provider errors with rate-limit details.
+- `TrackerClient.close()` and async context-manager support for releasing HTTP resources.
+
+### Changed
+- Added direct `httpx` runtime dependency for GitHub REST API access.
+- `TaskQuery.limit` is now honored by GitHub task listing; GitHub task list/count operations require `project_id`.
+
+### Documentation and tests
+- Replaced Asana examples and environment settings with a read-only GitHub live-validation flow.
+- Updated provider, auth, project, task, relation, roadmap, and third-party dependency documentation.
+- Added GitHub mapper, query, identifier, transport, client, and relation tests.
+- Verified the read-only example against `depensee-dev/trackerkit`: two existing issues and their native `contains` relation were loaded without modifying GitHub data.
 
 ## [0.3.2] - 2026-07-18
 ### Fixed

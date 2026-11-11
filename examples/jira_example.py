@@ -1,9 +1,12 @@
 import asyncio
 import os
 
+from _base import wait_for_enter
+from _env import load_env
+
 from trackerkit import (
-    CreateRelationInput,
     CreateProjectInput,
+    CreateRelationInput,
     CreateTaskInput,
     JiraAuthConfig,
     ProviderCapabilityError,
@@ -15,8 +18,6 @@ from trackerkit import (
     UpdateProjectInput,
     UpdateTaskInput,
 )
-from _base import wait_for_enter
-from _env import load_env
 
 
 async def main() -> None:
@@ -50,8 +51,7 @@ async def main() -> None:
     print("jira: available projects")
     for available_project in available_projects:
         print(
-            f"- id={available_project.id} key={available_project.key} "
-            f"name={available_project.name}"
+            f"- id={available_project.id} key={available_project.key} name={available_project.name}"
         )
 
     # 3. Create, read, update, and delete a project when the token has enough
@@ -196,4 +196,3 @@ if __name__ == "__main__":
         asyncio.run(main())
     except TrackerClientError as error:
         print(error)
-

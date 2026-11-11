@@ -3,9 +3,12 @@ import os
 import random
 import string
 
+from _base import wait_for_enter
+from _env import load_env
+
 from trackerkit import (
-    CreateRelationInput,
     CreateProjectInput,
+    CreateRelationInput,
     CreateTaskInput,
     ProviderCapabilityError,
     RelationType,
@@ -15,8 +18,6 @@ from trackerkit import (
     UpdateTaskInput,
     YandexTrackerAuthConfig,
 )
-from _base import wait_for_enter
-from _env import load_env
 
 
 async def main() -> None:
@@ -50,8 +51,7 @@ async def main() -> None:
     print("yandex_tracker: available projects")
     for available_project in projects:
         print(
-            f"- id={available_project.id} key={available_project.key} "
-            f"name={available_project.name}"
+            f"- id={available_project.id} key={available_project.key} name={available_project.name}"
         )
 
     # 3. Always create a temporary queue-backed project for the example flow.
@@ -150,9 +150,7 @@ async def main() -> None:
             )
             print(await client.list_relations(target_task.id))
 
-        wait_for_enter(
-            "Three relations created. Check them in Yandex Tracker before cleanup."
-        )
+        wait_for_enter("Three relations created. Check them in Yandex Tracker before cleanup.")
     finally:
         # Yandex Tracker does not support direct issue deletion reliably in this flow.
         # Instead, remove links and delete the whole temporary queue/project.
@@ -168,9 +166,7 @@ async def main() -> None:
                 "Relations removed. Tasks still exist in the temporary queue. Check them before project delete."
             )
             await client.delete_project(project.id)
-            wait_for_enter(
-                "Temporary project deleted. Check it in Yandex Tracker after delete."
-            )
+            wait_for_enter("Temporary project deleted. Check it in Yandex Tracker after delete.")
     print("yandex_tracker: done")
 
 
@@ -179,4 +175,3 @@ if __name__ == "__main__":
         asyncio.run(main())
     except TrackerClientError as error:
         print(error)
-

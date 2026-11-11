@@ -78,7 +78,7 @@ class TaskQuery(BaseModel):
     status_id: str | None = None
     updated_since: datetime | None = None
     # Soft cap on the number of items the adapter materializes from a paginated
-    # provider response. Currently honored by Asana (`list_tasks`); Jira/Yandex
+    # provider response. Currently honored by GitHub (`list_tasks`); Jira/Yandex
     # ignore it because they already use bounded server-side queries.
     limit: int | None = None
 
@@ -128,4 +128,3 @@ class UpdateRelationInput(BaseModel):
     source_task_id: str
     target_task_id: str
     relation_type: RelationType
-

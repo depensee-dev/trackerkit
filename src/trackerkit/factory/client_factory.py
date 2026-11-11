@@ -1,7 +1,7 @@
 from typing import ClassVar
 
 from trackerkit.contracts.auth import (
-    AsanaAuthConfig,
+    GitHubAuthConfig,
     JiraAuthConfig,
     ProviderAuthConfig,
     YandexTrackerAuthConfig,
@@ -10,7 +10,7 @@ from trackerkit.contracts.task_tracker_client import TaskTrackerClient
 from trackerkit.domain.enums import Provider
 from trackerkit.domain.errors import ConfigurationError
 from trackerkit.domain.relation_mapping import RelationMappingConfig
-from trackerkit.providers.asana.client import AsanaClient
+from trackerkit.providers.github.client import GitHubClient
 from trackerkit.providers.jira.client import JiraClient
 from trackerkit.providers.yandex_tracker.client import YandexTrackerClient
 
@@ -19,7 +19,7 @@ class TaskTrackerClientFactory:
     """Factory for provider-specific clients with a pluggable registry.
 
     Built-in providers (`Provider.JIRA`, `Provider.YANDEX_TRACKER`,
-    `Provider.ASANA`) are registered at import time. Host applications may
+    `Provider.GITHUB`) are registered at import time. Host applications may
     register additional providers via :meth:`register` to plug in custom
     adapters without editing the library.
     """
@@ -83,9 +83,7 @@ class TaskTrackerClientFactory:
         return client_type(config, relation_mapping=relation_mapping)
 
     @classmethod
-    def build_auth_config(
-        cls, provider: Provider | str, auth_data: dict
-    ) -> ProviderAuthConfig:
+    def build_auth_config(cls, provider: Provider | str, auth_data: dict) -> ProviderAuthConfig:
         key = cls._normalize_key(provider)
         config_type = cls._config_registry.get(key)
 
@@ -101,5 +99,4 @@ TaskTrackerClientFactory.register(Provider.JIRA, JiraAuthConfig, JiraClient)
 TaskTrackerClientFactory.register(
     Provider.YANDEX_TRACKER, YandexTrackerAuthConfig, YandexTrackerClient
 )
-TaskTrackerClientFactory.register(Provider.ASANA, AsanaAuthConfig, AsanaClient)
-
+TaskTrackerClientFactory.register(Provider.GITHUB, GitHubAuthConfig, GitHubClient)

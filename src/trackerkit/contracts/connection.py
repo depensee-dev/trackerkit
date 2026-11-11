@@ -12,3 +12,5 @@ class ConnectionCapability(ABC):
     async def get_connection_diagnostic(self) -> ConnectionDiagnostic:
         raise NotImplementedError
 
+    async def close(self) -> None:
+        return None

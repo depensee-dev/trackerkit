@@ -1,14 +1,14 @@
 [project]
 name = "trackerkit"
-version = "0.3.2"
-description = "Unified async client library for Jira, Yandex Tracker, and Asana integrations."
+version = "0.4.0"
+description = "Unified async client library for Jira, Yandex Tracker, and GitHub integrations."
 readme = "README.md"
 requires-python = ">=3.12,<3.15"
 license = "MIT"
 authors = [
     { name = "Mikhail Stasyshin", email = "m.stasyshin@gmail.com" },
 ]
-keywords = ["jira", "yandex-tracker", "asana", "task-tracker", "async", "integration"]
+keywords = ["jira", "yandex-tracker", "github", "task-tracker", "async", "integration"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -22,7 +22,7 @@ dependencies = [
     "pydantic>=2.12.5,<3.0.0",
     "jira>=3.10.5,<4.0.0",
     "yandex-tracker-client>=2.10,<3.0",
-    "asana>=5.2.4,<6.0.0",
+    "httpx>=0.28.1,<1.0.0",
 ]
 
 [project.urls]

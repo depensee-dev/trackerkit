@@ -90,18 +90,31 @@ def fake_yandex_user_payload() -> FakeAttr:
 
 
 @pytest.fixture
-def asana_task_payload() -> dict[str, Any]:
+def fake_github_repository_payload() -> dict[str, Any]:
     return {
-        "gid": "task-1",
-        "name": "Demo task",
-        "notes": "Body",
-        "completed": False,
-        "due_at": "2025-02-01T09:00:00.000Z",
-        "modified_at": "2025-01-02T11:00:00.000Z",
-        "created_at": "2025-01-01T10:00:00.000Z",
-        "permalink_url": "https://app.asana.com/0/123/task-1",
-        "projects": [{"gid": "proj-1"}],
-        "assignee": {"gid": "user-1", "name": "Alice"},
+        "id": 501,
+        "name": "project",
+        "full_name": "octocat/project",
+        "description": "Demo repository",
+        "owner": {"id": 77, "login": "octocat", "type": "User"},
+    }
+
+
+@pytest.fixture
+def fake_github_issue_payload() -> dict[str, Any]:
+    return {
+        "id": 10001,
+        "number": 42,
+        "title": "Demo issue",
+        "body": "Body",
+        "state": "open",
+        "user": {"login": "octocat"},
+        "assignee": {"login": "octocat"},
+        "assignees": [{"login": "octocat"}],
+        "created_at": "2025-01-01T10:00:00Z",
+        "updated_at": "2025-01-02T11:00:00Z",
+        "html_url": "https://github.com/octocat/project/issues/42",
+        "repository_url": "https://api.github.com/repos/octocat/project",
     }
 
 

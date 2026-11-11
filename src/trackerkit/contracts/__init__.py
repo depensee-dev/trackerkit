@@ -1,5 +1,5 @@
 from trackerkit.contracts.auth import (
-    AsanaAuthConfig,
+    GitHubAuthConfig,
     JiraAuthConfig,
     ProviderAuthConfig,
     YandexTrackerAuthConfig,
@@ -17,9 +17,9 @@ from trackerkit.contracts.tasks import TaskReadCapability, TaskWriteCapability
 from trackerkit.contracts.users import UserCapability
 
 __all__ = [
-    "AsanaAuthConfig",
     "CommentCapability",
     "ConnectionCapability",
+    "GitHubAuthConfig",
     "JiraAuthConfig",
     "ProjectReadCapability",
     "ProjectWriteCapability",
@@ -32,4 +32,3 @@ __all__ = [
     "WorkspaceCapability",
     "YandexTrackerAuthConfig",
 ]
-

@@ -15,12 +15,16 @@ await client.check_connection() -> bool
 await client.ensure_connection() -> None
 await client.get_connection_diagnostic() -> ConnectionDiagnostic
 client.invalidate_connection_cache() -> None
+await client.close() -> None
 ```
+
+`TrackerClient` is also an async context manager. Use `async with` or call
+`close()` explicitly so the GitHub HTTP transport releases its connections.
 
 ## Providers
 - `jira`
 - `yandex_tracker`
-- `asana`
+- `github`
 
 ## Jira
 
@@ -77,57 +81,80 @@ client = TrackerClient(
 )
 ```
 
-## Asana
+## GitHub
 
 ### `auth_data`
-- `access_token`: `str`
+- `access_token`: `str`, required
+- `base_url`: `str`, default `https://api.github.com`
+- `api_version`: `str`, default `2026-03-10`
+- `max_concurrency`: `int`, default `10`, allowed range `1..100`
 
-### Validation
-- required: `access_token`
+The current connection and repository discovery flow uses `/user`, `/user/orgs`,
+and `/user/repos`. Use a personal access token or a GitHub/OAuth App **user**
+access token. GitHub App installation access tokens are not supported by this
+flow yet.
+
+For read-only access to issues, grant repository `Issues: read` and `Metadata:
+read`. Issue and relation writes require `Issues: write`. Repository discovery
+only returns repositories visible to the configured token. Organization SSO or
+repository selection policies can further restrict the result.
+
+The adapter pins `X-GitHub-Api-Version` and targets the current GitHub.com APIs,
+including related issues, dependencies, and sub-issues. Compatibility with a
+particular GitHub Enterprise Server version must be verified separately when
+using a custom `base_url`.
 
 ### Example
 ```python
-from trackerkit import TrackerClient
+from trackerkit import GitHubAuthConfig, TrackerClient
 
-client = TrackerClient(
-    provider="asana",
-    auth_data={
-        "access_token": "secret",
-    },
-    connection_timeout=3,
+config = GitHubAuthConfig(
+    access_token="secret",
+    max_concurrency=10,
 )
+
+async with TrackerClient(
+    provider="github",
+    auth_data=config.model_dump(),
+    connection_timeout=3,
+) as client:
+    await client.ensure_connection()
 ```
 
 ## Errors
 - `ConfigurationError` if required auth fields are missing
 - `AuthenticationError` if the client is disconnected or provider auth is invalid
 - `ConfigurationError` or enum coercion `ValueError` if `provider` is not supported
+- GitHub HTTP errors are normalized to `AuthenticationError` or `ProviderError`;
+  rate-limit responses retain `Retry-After` / reset details in the message
 
 ## Connection Options
 - `connection_timeout` controls provider request timeout in seconds
-- `max_retries` controls additional retry attempts for Jira transport
-- `relation_mapping` overrides default relation normalization and provider link mapping
+- `max_retries` controls additional retry attempts for Jira transport; GitHub currently reports rate limits instead of automatically waiting
+- `relation_mapping` overrides default relation normalization and provider link mapping for Jira/Yandex
 - `connection_check_ttl` (seconds) caches a successful auth check; `0` disables caching
 - `verify_each_call` forces a fresh provider auth check before every business call
-- these options are passed separately from `auth_data`
+- these connection-guard options are passed separately from `auth_data`
 - defaults are defined on `TrackerClient`, not in environment variables
 - current defaults: `connection_timeout=3.0`, `max_retries=0`, `connection_check_ttl=30.0`, `verify_each_call=False`
 - `connection_timeout <= 0`, `max_retries < 0`, and `connection_check_ttl < 0` raise `ConfigurationError`
 
 ## Capability Scope
-- `workspaces`, `projects`, and `tasks` are implemented by Jira, Yandex Tracker, and Asana
-- relation CRUD is implemented by Jira and Yandex Tracker
-- Asana relation CRUD is not implemented yet
+- `workspaces`, `projects`, and `tasks` are implemented by Jira, Yandex Tracker, and GitHub
+- relation CRUD is implemented by all three providers
+- GitHub issue create/update is implemented; direct issue deletion is unsupported
+- GitHub repository create/update/delete is unsupported in the current adapter
 - users and comments are present in the shared contract as future capabilities; provider adapters currently raise `ProviderCapabilityError`
 
 ## Relation Mapping
-- `RelationMappingConfig` is an optional runtime config for relation semantics
+- `RelationMappingConfig` is an optional runtime config for Jira/Yandex relation semantics
 - the primary path is explicit config construction and passing it into `TrackerClient`
 - `RelationMappingConfig.from_env()` is an opt-in helper for examples, tests, or host services that intentionally use environment-based settings
 - by default:
   - Jira maps `relates` and `blocks` through issue links
   - Jira maps `contains` through structural hierarchy
   - Yandex Tracker maps `relates`, `blocks`, and `contains` through native link values
+  - GitHub maps them to related issues, dependencies, and sub-issues without configurable labels
 - pass a custom config only when provider defaults do not match your workspace setup
 
 ### Example
@@ -166,7 +193,7 @@ client = TrackerClient(
 ```
 
 ## Diagnostics
-- `TrackerClient(...)` validates configuration immediately and raises `ConfigurationError` if required auth fields are missing
+- `TrackerClient(...)` validates configuration immediately and raises `ConfigurationError` for invalid common options
 - provider network calls are lazy and usually start on `check_connection()` or the first business method call
 - `check_connection()` returns only `bool`
 - `ensure_connection()` writes a named library log entry on failure and raises a normalized domain error
@@ -187,6 +214,7 @@ client = TrackerClient(
 - auth configs and shared DTOs remain `Pydantic` models
 - the public API of the library is async
 - provider transports may use native async clients or wrap sync SDKs internally
+- GitHub uses a native `httpx.AsyncClient` and an adapter-local concurrency limiter
 - the library does not load `.env` files; configuration is injected from the host service
 - env-based helpers read process environment only when called explicitly
 - local `examples/` may load `.env.example` and `.env` only for manual development runs
@@ -205,19 +233,13 @@ class TrackerSettings(BaseSettings):
         env_file_encoding="utf-8",
     )
 
-    jira_base_url: str
-    jira_token: str
+    github_token: str
 
 
 settings = TrackerSettings()
 
 client = TrackerClient(
-    provider="jira",
-    auth_data={
-        "base_url": settings.jira_base_url,
-        "access_token": settings.jira_token,
-    },
-    connection_timeout=3,
-    max_retries=0,
+    provider="github",
+    auth_data={"access_token": settings.github_token},
 )
 ```

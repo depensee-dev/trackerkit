@@ -1,11 +1,16 @@
 # trackerkit
 
-Unified async client library for Jira, Yandex Tracker, and Asana integrations.
+Unified async client library for Jira, Yandex Tracker, and GitHub integrations.
 
 ## Status
 - early-stage internal library;
 - API and provider coverage may still evolve;
-- currently focused on a shared contract for Jira, Yandex Tracker, and Asana.
+- actively developed against a shared contract for Jira, Yandex Tracker, and GitHub.
+
+### Asana removal
+
+Asana was removed in `0.4.0`, including the adapter and runtime dependency.
+Applications that still need it should use `trackerkit>=0.3.0,<0.4.0`.
 
 ## Installation
 
@@ -18,7 +23,7 @@ pip install trackerkit
 Install from a Git tag:
 
 ```bash
-pip install "git+https://github.com/depensee-dev/trackerkit.git@v0.3.0"
+pip install "git+https://github.com/depensee-dev/trackerkit.git@v0.4.0"
 ```
 
 Install from the `main` branch:
@@ -41,14 +46,14 @@ pip install .
 
 ## Goals
 - provide one common contract for supported task trackers;
-- hide provider-specific SDK details from the main backend;
+- hide provider-specific SDK and HTTP details from the main backend;
 - expose only shared entities and operations;
 - keep the design extensible and testable.
 
 ## Supported providers
 - Jira
 - Yandex Tracker
-- Asana
+- GitHub (Issues and repository-backed projects)
 
 ## Current scope
 - one facade client per one selected task tracker;
@@ -56,16 +61,22 @@ pip install .
 - shared models for tasks, projects, users, comments, relations, and statuses;
 - provider auth configs;
 - real provider adapters for `workspaces`, `projects`, and `tasks`;
-- relation CRUD for `Jira` and `Yandex Tracker`;
+- relation CRUD for all three providers;
 - users and comments are modeled in the shared contract, but provider adapters currently report them as unsupported capabilities;
-- client factory.
+- client factory and explicit HTTP resource cleanup.
+
+GitHub supports issue create/update but not direct issue deletion through this adapter.
+GitHub project write operations (repository create/update/delete) currently raise
+`ProviderCapabilityError`.
 
 ## Internal architecture
 - capability-based contracts instead of one monolithic provider interface;
 - `TrackerClient` facade with centralized connection guard;
 - provider adapters split into `transport`, `queries`, `mappers`, and `errors`;
 - domain models and auth configs remain typed with `Pydantic`;
-- the public API stays async even when a provider transport uses a sync SDK under the hood.
+- the public API stays async even when a provider transport uses a sync SDK under the hood;
+- GitHub uses native async REST via `httpx`, including the current sub-issue,
+  dependency, and related-issue endpoints.
 
 ## Package layout
 ```text
@@ -85,16 +96,16 @@ src/
 ```python
 from trackerkit import TrackerClient
 
-client = TrackerClient(
-    provider="jira",
-    auth_data={
-        "base_url": "https://your-domain.atlassian.net",
-        "access_token": "secret",
-    },
+async with TrackerClient(
+    provider="github",
+    auth_data={"access_token": "secret"},
     connection_timeout=3,
-    max_retries=0,
-)
+) as client:
+    projects = await client.list_projects()
 ```
+
+`GitHubAuthConfig` also accepts `base_url`, `api_version`, and `max_concurrency`.
+The defaults target GitHub.com with API version `2026-03-10`.
 
 ## Development
 - Python `3.12+` (required — the codebase uses `from datetime import UTC` and
@@ -125,7 +136,9 @@ This library is designed to be embedded into a backend service.
 - the service loads configuration and passes typed `auth_data` into `TrackerClient`;
 - optional helpers such as `RelationMappingConfig.from_env()` read environment variables only when the host service or an example calls them explicitly;
 - connection behavior is configured via explicit `TrackerClient` arguments instead of `auth_data`;
-- only `examples/` load local env files for manual development checks.
+- provider-specific connection options such as GitHub `max_concurrency` live in `auth_data`;
+- only `examples/` load local env files for manual development checks;
+- close the facade with `close()` or `async with` so GitHub HTTP connections are released.
 
 ### Pydantic settings example
 ```python
@@ -134,47 +147,44 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from trackerkit import TrackerClient
 
 
-class JiraSettings(BaseSettings):
+class GitHubSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
     )
 
-    base_url: str
     token: str
 
 
-settings = JiraSettings()
+settings = GitHubSettings()
 
 client = TrackerClient(
-    provider="jira",
-    auth_data={
-        "base_url": settings.base_url,
-        "access_token": settings.token,
-    },
+    provider="github",
+    auth_data={"access_token": settings.token},
     connection_timeout=3,
-    max_retries=0,
 )
 ```
 
 ## Documentation
-- `docs/auth.md` - authorization and client initialization.
+- `docs/auth.md` - authorization, client initialization, and lifecycle.
 - `docs/projects.md` - workspaces and project methods.
 - `docs/tasks.md` - task methods and task models.
 - `docs/relations.md` - relation semantics, mapping config, and CRUD behavior.
-- `ROADMAP.md` - status, ChainForge-driven priorities, release targets 0.3–0.5.
+- `ROADMAP.md` - status and priorities driven by the host product (Depensee).
 - `TECH_ROADMAP.md` - engineering debt, tests, and execution order.
 - `THIRD_PARTY_LICENSES.md` - direct runtime dependency license summary.
 
 ## Examples
 - `examples/jira_example.py` - Jira auth, projects flow, task flow, and relation flow.
 - `examples/yandex_example.py` - Yandex Tracker auth, projects flow, task flow, and relation flow.
-- `examples/asana_example.py` - Asana auth and readonly inspection flow.
+- `examples/github_example.py` - read-only GitHub auth, repository issue, and relation inspection. Requires `GITHUB_REPOSITORY`; never modifies GitHub data.
 
 ## Notes
 `src` is configured as the import root for the repository.
 
-`Jira`, `Yandex Tracker`, and `Asana` already implement the shared `workspaces`, `projects`, and `tasks` contract. `Jira` and `Yandex Tracker` also implement relation CRUD for the core product relation types. `Asana` relations remain follow-up work.
+`Jira`, `Yandex Tracker`, and `GitHub` implement the shared `workspaces`,
+`projects`, and `tasks` contract, subject to the documented capability limits.
+All three implement relation CRUD for the core product relation types.
 
 ## Entity Mapping
 `trackerkit` exposes a canonical task-tracker model.
@@ -183,34 +193,36 @@ Shared entities do not have to match provider-native names one to one.
 They are mapped by functional role in the workflow, and some shared entities are integration-level abstractions rather than native provider objects.
 
 ### Provider source model
-| Shared entity | Jira source model | Yandex Tracker source model | Asana source model |
+| Shared entity | Jira source model | Yandex Tracker source model | GitHub source model |
 | --- | --- | --- | --- |
-| `Workspace` | integration-level container for one Jira site / instance | organization context selected by `X-Org-ID` or `X-Cloud-Org-ID` | native Asana workspace |
-| `Project` | native Jira project | queue for operational task work; Yandex also has a separate native `project` entity above queues | native Asana project |
-| `Task` | native Jira issue / work item | native Yandex issue in a queue | native Asana task |
-| `Status` | native issue status | native issue status in queue workflow | task completion state and related task state fields |
-| `User` | native Jira user | native Tracker user | native Asana user |
-| `Relation` | native Jira issue link or hierarchy relation depending on config | native issue link with explicit relationship type and direction | task dependency / dependent edge rather than a general-purpose typed link |
+| `Workspace` | integration-level container for one Jira site / instance | organization context selected by `X-Org-ID` or `X-Cloud-Org-ID` | user account or organization that owns repositories |
+| `Project` | native Jira project | queue for operational task work; Yandex also has a separate native `project` entity above queues | repository; not a GitHub Projects board |
+| `Task` | native Jira issue / work item | native Yandex issue in a queue | native GitHub issue, excluding pull requests |
+| `Status` | native issue status | native issue status in queue workflow | issue state: `open` or `closed` |
+| `User` | native Jira user | native Tracker user | GitHub user identified by login |
+| `Relation` | native Jira issue link or hierarchy relation depending on config | native issue link with explicit relationship type and direction | related issue, issue dependency, or parent/sub-issue hierarchy |
 
 ### Canonical mapping decision in `trackerkit`
 - `Jira`: shared `Project` maps to Jira project, and shared `Task` maps to issue.
 - `Yandex Tracker`: shared `Project` maps to queue, and shared `Task` maps to issue inside that queue.
 - `Yandex Tracker`: native Yandex `project` is documented as a separate higher-level entity and is not part of the current shared contract.
-- `Yandex Tracker`: direct issue deletion is not supported by the provider in the same way as in some other trackers, so task deletion should be modeled as unsupported or as a separate close/archive workflow.
-- `Asana`: shared `Project` maps to Asana project, and shared `Task` maps to task.
+- `Yandex Tracker`: direct issue deletion is unsupported by the adapter; close/archive semantics remain provider-specific.
+- `GitHub`: shared `Project` maps to repository because an issue belongs to exactly one repository. GitHub Projects has many-to-many membership and is not equivalent.
+- `GitHub`: shared `Task` maps to issue. Task IDs are opaque versioned handles containing the global issue ID, repository ID, and issue number; display keys use `owner/repo#number`.
+- `GitHub`: direct issue deletion and repository write operations are unsupported by the current adapter.
 - `Jira`: shared `Relation` maps to issue links for `relates` and `blocks`, and to hierarchy for default `contains`.
 - `Yandex Tracker`: shared `Relation` maps to native issue links; provider-native link types cover both dependency-style and hierarchy-style relations.
-- `Asana`: relation mapping is conceptually clear for dependencies and subtasks, but relation CRUD is not implemented in the adapter yet.
+- `GitHub`: shared `Relation` maps to native related issues, dependencies, and sub-issues.
 
 ### Product-first core relation semantics
 For the product concept, the most important relation taxonomy is the one that supports canvas visualization and planning semantics.
 The core visual set is smaller than the full set of provider-native link types.
 
-| Core relation | Meaning in the product | Default visual style | Jira source model | Yandex Tracker source model | Asana source model |
+| Core relation | Meaning in the product | Default visual style | Jira source model | Yandex Tracker source model | GitHub source model |
 | --- | --- | --- | --- | --- | --- |
-| `relates` | weak semantic connection without strict dependency | dashed line | symmetric relates-style issue link when configured | native `relates` | no direct native equivalent |
-| `blocks` | one task blocks or unlocks another | directed arrow | Blocks-style issue link direction | `depends on` / `is dependent by` | dependencies / dependents |
-| `contains` | one task structurally includes, decomposes, or parents another | solid line | work item hierarchy such as parent-child or subtask hierarchy | `is parent task for` / `is subtask for`, plus epic-style hierarchy when relevant | subtasks |
+| `relates` | weak semantic connection without strict dependency | dashed line | symmetric relates-style issue link when configured | native `relates` | native `relates_to` |
+| `blocks` | one task blocks or unlocks another | directed arrow | Blocks-style issue link direction | `depends on` / `is dependent by` | `blocked by` / `blocking` |
+| `contains` | one task structurally includes, decomposes, or parents another | solid line | work item hierarchy such as parent-child or subtask hierarchy | `is parent task for` / `is subtask for`, plus epic-style hierarchy when relevant | parent issue / sub-issues |
 
 ### Non-core provider relations
 Provider-specific relation variants such as duplicates, clones, epics, or custom hierarchy
@@ -222,17 +234,7 @@ preserves the product meaning.
 - The product-facing taxonomy above is the active shared model for relation work in the library.
 - Jira allows custom issue link types, so label-based normalization stays explicit and source-aware.
 - `RelationMappingConfig` provides a default `Mode A` structural hierarchy for Jira `contains` and leaves room for `Mode B` custom link mapping.
-- Asana covers dependency and subtask hierarchy well, but does not provide a general-purpose typed link system equivalent to Jira or Yandex Tracker.
-
-### Source notes
-- Jira describes a project/space as a configurable container for work items.
-- Yandex Tracker documents that every issue belongs to a queue, and also documents a separate native `project` entity that can include queues.
-- Asana documents a project as a prioritized list of tasks or a board, and a task as the main work item inside workspaces and projects.
-- Jira documents issue links as bidirectional links with configurable link types, each having inward and outward descriptions.
-- Yandex Tracker documents links between issues with explicit relationship values such as `relates`, `depends on`, `is dependent by`, `duplicates`, and hierarchy-specific variants.
-- Asana documents task dependencies and dependents, which model blocking order rather than a general relation taxonomy.
-- Jira and Asana also document hierarchy-style task structures such as work item hierarchy and subtasks.
-- Yandex Tracker documents hierarchy-oriented issue links such as parent-task and subtask relations.
+- GitHub needs no relation-label mapping because its native relation types have stable semantics.
 
 ### Sources
 - Jira: [Projects / spaces overview](https://www.atlassian.com/software/jira/guides/projects/overview)
@@ -240,10 +242,10 @@ preserves the product meaning.
 - Yandex Tracker: [Queue introduction](https://yandex.ru/support/tracker/en/queue-intro)
 - Yandex Tracker: [Get project parameters](https://yandex.ru/support/tracker/en/api-ref/projects/get-project)
 - Yandex Tracker: [Linking issues](https://yandex.ru/support/tracker/en/api-ref/issues/link-issue)
-- Asana: [Projects reference](https://developers.asana.com/reference/projects)
-- Asana: [Tasks reference](https://developers.asana.com/reference/tasks)
-- Asana: [Set dependencies for a task](https://developers.asana.com/reference/adddependenciesfortask)
-- Asana: [Get dependents from a task](https://developers.asana.com/reference/getdependentsfortask)
+- GitHub: [Issues REST API](https://docs.github.com/en/rest/issues/issues)
+- GitHub: [Sub-issues REST API](https://docs.github.com/en/rest/issues/sub-issues)
+- GitHub: [Issue dependencies REST API](https://docs.github.com/en/rest/issues/issue-dependencies)
+- GitHub: [Repositories REST API](https://docs.github.com/en/rest/repos/repos)
 
 Examples use environment variables instead of hardcoded credentials.
 Host services should prefer explicit settings objects and pass `auth_data` / `relation_mapping`
@@ -257,8 +259,10 @@ into `TrackerClient` during initialization:
 - `YANDEX_TOKEN`
 - `YANDEX_CLOUD_ORG_ID` - use one of `YANDEX_CLOUD_ORG_ID` or `YANDEX_ORG_ID`
 - `YANDEX_ORG_ID` - use one of `YANDEX_CLOUD_ORG_ID` or `YANDEX_ORG_ID`
-- `ASANA_TOKEN`
-- `ASANA_PROJECT_ID` - optional, enables Asana task listing
+- `GITHUB_TOKEN`
+- `GITHUB_REPOSITORY` - required by the live example, `owner/repository`
+- `GITHUB_API_URL` - optional, defaults to `https://api.github.com`
+- `GITHUB_API_VERSION` - optional, defaults to `2026-03-10`
 
 Local development files:
 - `.env.example` - fallback template for local example runs
@@ -270,4 +274,4 @@ Examples load variables with this priority:
 3. `.env.example`
 
 ## Roadmap
-See `ROADMAP.md` for release plan (0.3 sync, 0.4 PERT data, 0.5 scale/auth) and `TECH_ROADMAP.md` for engineering tasks.
+See `ROADMAP.md` for the feature plan (next: real-time sync; later: CPM / PERT data, scale and auth) and `TECH_ROADMAP.md` for engineering tasks.

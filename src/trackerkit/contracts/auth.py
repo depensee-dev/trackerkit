@@ -34,9 +34,7 @@ class JiraAuthConfig(ProviderAuthConfig):
     @model_validator(mode="after")
     def validate_auth(self) -> "JiraAuthConfig":
         if not self.api_token and not self.access_token:
-            raise ConfigurationError(
-                "JiraAuthConfig requires either api_token or access_token."
-            )
+            raise ConfigurationError("JiraAuthConfig requires either api_token or access_token.")
         if self.api_token and self.access_token:
             raise ConfigurationError(
                 "JiraAuthConfig expects only one of api_token or access_token."
@@ -61,9 +59,7 @@ class YandexTrackerAuthConfig(ProviderAuthConfig):
     @model_validator(mode="after")
     def validate_auth(self) -> "YandexTrackerAuthConfig":
         if not self.token and not self.iam_token:
-            raise ConfigurationError(
-                "YandexTrackerAuthConfig requires either token or iam_token."
-            )
+            raise ConfigurationError("YandexTrackerAuthConfig requires either token or iam_token.")
         if self.token and self.iam_token:
             raise ConfigurationError(
                 "YandexTrackerAuthConfig expects only one of token or iam_token."
@@ -79,13 +75,11 @@ class YandexTrackerAuthConfig(ProviderAuthConfig):
         return self
 
 
-class AsanaAuthConfig(ProviderAuthConfig):
-    """Asana auth data.
+class GitHubAuthConfig(ProviderAuthConfig):
+    """GitHub auth data for a personal or OAuth user access token."""
 
-    Expected fields:
-    - `access_token`
-    """
-
-    provider: Provider = Provider.ASANA
-    access_token: str
-
+    provider: Provider = Provider.GITHUB
+    access_token: str = Field(min_length=1)
+    base_url: str = "https://api.github.com"
+    api_version: str = "2026-03-10"
+    max_concurrency: int = Field(default=10, ge=1, le=100)

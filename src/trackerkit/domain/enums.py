@@ -4,7 +4,7 @@ from enum import Enum
 class Provider(str, Enum):
     JIRA = "jira"
     YANDEX_TRACKER = "yandex_tracker"
-    ASANA = "asana"
+    GITHUB = "github"
 
 
 class RelationType(str, Enum):
@@ -25,4 +25,3 @@ class ConnectionErrorKind(str, Enum):
     CONFIGURATION = "configuration"
     CAPABILITY = "capability"
     PROVIDER = "provider"
-

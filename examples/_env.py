@@ -1,5 +1,5 @@
-from pathlib import Path
 import os
+from pathlib import Path
 
 
 def _load_file(path: Path, *, original_env_keys: set[str], override: bool) -> None:
@@ -36,4 +36,3 @@ def load_env() -> None:
         original_env_keys=original_env_keys,
         override=True,
     )
-

@@ -52,7 +52,8 @@ class TrackerClient:
         - `jira`: `base_url` and exactly one of `access_token` or `api_token`
         - `yandex_tracker`: exactly one of `token` or `iam_token`, and exactly
           one of `org_id` or `cloud_org_id`
-        - `asana`: `access_token`
+        - `github`: `access_token`; optional `base_url`, `api_version`, and
+          `max_concurrency`
 
         Connection check semantics:
         - by default, the first business call triggers one provider auth check
@@ -64,9 +65,7 @@ class TrackerClient:
         """
 
         if connection_timeout <= 0:
-            raise ConfigurationError(
-                "connection_timeout must be a positive number of seconds."
-            )
+            raise ConfigurationError("connection_timeout must be a positive number of seconds.")
         if max_retries < 0:
             raise ConfigurationError("max_retries must be zero or positive.")
         if connection_check_ttl < 0:
@@ -102,8 +101,7 @@ class TrackerClient:
         diagnostic: ConnectionDiagnostic,
     ) -> AuthenticationError | ConfigurationError | ProviderError:
         message = (
-            diagnostic.message
-            or f"Provider '{self._provider.value}' connection check failed."
+            diagnostic.message or f"Provider '{self._provider.value}' connection check failed."
         )
 
         if diagnostic.error_kind is ConnectionErrorKind.AUTHENTICATION:
@@ -121,10 +119,7 @@ class TrackerClient:
             return False
         if self._connection_check_ttl <= 0:
             return False
-        return (
-            time.monotonic() - self._last_successful_check_at
-            < self._connection_check_ttl
-        )
+        return time.monotonic() - self._last_successful_check_at < self._connection_check_ttl
 
     def invalidate_connection_cache(self) -> None:
         """Drop the cached successful connection check.
@@ -164,6 +159,15 @@ class TrackerClient:
     async def get_connection_diagnostic(self) -> ConnectionDiagnostic:
         return await self._client.get_connection_diagnostic()
 
+    async def close(self) -> None:
+        await self._client.close()
+
+    async def __aenter__(self) -> "TrackerClient":
+        return self
+
+    async def __aexit__(self, *args: object) -> None:
+        await self.close()
+
     async def get_task(self, task_id: str) -> Task:
         return await self._execute(lambda: self._client.get_task(task_id))
 
@@ -199,9 +203,7 @@ class TrackerClient:
         project_id: str,
         payload: UpdateProjectInput,
     ) -> Project:
-        return await self._execute(
-            lambda: self._client.update_project(project_id, payload)
-        )
+        return await self._execute(lambda: self._client.update_project(project_id, payload))
 
     async def delete_project(self, project_id: str) -> None:
         await self._execute(lambda: self._client.delete_project(project_id))
@@ -226,10 +228,7 @@ class TrackerClient:
         relation_id: str,
         payload: UpdateRelationInput,
     ) -> Relation:
-        return await self._execute(
-            lambda: self._client.update_relation(relation_id, payload)
-        )
+        return await self._execute(lambda: self._client.update_relation(relation_id, payload))
 
     async def delete_relation(self, relation_id: str) -> None:
         await self._execute(lambda: self._client.delete_relation(relation_id))
-
