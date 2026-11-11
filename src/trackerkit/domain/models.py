@@ -2,7 +2,13 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from trackerkit.domain.enums import ConnectionErrorKind, Provider, RelationType
+from trackerkit.domain.enums import (
+    ConnectionErrorKind,
+    Provider,
+    RelationType,
+    TaskPriority,
+    TaskWorkType,
+)
 
 
 class User(BaseModel):
@@ -48,6 +54,8 @@ class Task(BaseModel):
     description: str | None = None
     project_id: str | None = None
     status: Status | None = None
+    priority: TaskPriority | None = None
+    work_type: TaskWorkType | None = None
     assignee: User | None = None
     reporter: User | None = None
     created_at: datetime | None = None

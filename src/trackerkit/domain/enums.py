@@ -13,6 +13,19 @@ class RelationType(str, Enum):
     CONTAINS = "contains"
 
 
+class TaskPriority(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+class TaskWorkType(str, Enum):
+    BUG = "bug"
+    FEATURE = "feature"
+    TASK = "task"
+    REFACTOR = "refactor"
+
+
 class ConnectionErrorKind(str, Enum):
     """Stable taxonomy of connection-check failure reasons.
 

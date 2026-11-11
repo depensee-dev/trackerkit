@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from trackerkit.domain.models import Project, Status, Task, User, Workspace
+from trackerkit.providers.yandex_tracker.metadata import normalize_priority, normalize_work_type
 
 
 class YandexTrackerMapper:
@@ -33,6 +34,8 @@ class YandexTrackerMapper:
             description=getattr(issue, "description", None),
             project_id=getattr(queue, "key", None) if queue is not None else None,
             status=self._to_status(getattr(issue, "status", None)),
+            priority=normalize_priority(self._metadata_value(getattr(issue, "priority", None))),
+            work_type=normalize_work_type(self._metadata_value(getattr(issue, "type", None))),
             assignee=self._to_user(getattr(issue, "assignee", None)),
             reporter=self._to_user(getattr(issue, "createdBy", None)),
             created_at=self._parse_datetime(getattr(issue, "createdAt", None)),
@@ -67,24 +70,30 @@ class YandexTrackerMapper:
         # Touching a missing attribute (e.g. ``uid``/``email``) on a Reference
         # would otherwise fetch the full user one HTTP call at a time — an N+1
         # storm when mapping a whole page of issues.
+        if isinstance(value, dict):
+            return value
         as_dict = getattr(value, "as_dict", None)
         if callable(as_dict):
             data = as_dict()
             if isinstance(data, dict):
                 return data
-        keys = ("uid", "id", "login", "display", "firstName", "email")
+        keys = ("uid", "id", "login", "display", "firstName", "email", "key", "name")
         return {key: getattr(value, key, None) for key in keys}
+
+    def _metadata_value(self, value: Any) -> str | None:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            return value
+        data = self._short_value(value)
+        result = data.get("key") or data.get("name") or data.get("display")
+        return str(result) if result is not None else None
 
     def _to_user(self, value: Any) -> User | None:
         if value is None:
             return None
         data = self._short_value(value)
-        user_id = (
-            data.get("uid")
-            or data.get("id")
-            or data.get("login")
-            or data.get("display")
-        )
+        user_id = data.get("uid") or data.get("id") or data.get("login") or data.get("display")
         if user_id is None:
             return None
         display_name = (
@@ -108,4 +117,3 @@ class YandexTrackerMapper:
             name=str(getattr(value, "display", None) or getattr(value, "key", "")),
             category=None,
         )
-

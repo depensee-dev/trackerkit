@@ -16,8 +16,8 @@ Engineering tasks (tests, perf, encapsulation): [`TECH_ROADMAP.md`](TECH_ROADMAP
 ## At a glance
 
 Released so far: **0.3.0** (stabilization), **0.3.1** and **0.3.2** (Yandex
-Tracker fixes), **0.4.0** (GitHub Issues; Asana removal). Version numbers below
-are deliberately not assigned to future stages.
+Tracker fixes), **0.4.0** (GitHub Issues; Asana removal), **0.4.1** (canonical
+priority and work type). Version numbers below are deliberately not assigned to future stages.
 
 | Stage | Theme | Main deliverables |
 | --- | --- | --- |
@@ -147,13 +147,14 @@ handle API limits safely.
 
 ---
 
-## Current status (0.4.0)
+## Current status (0.4.1)
 
 ### Done
 
 - Public async `TrackerClient` facade for one selected provider, with explicit close / async context-manager lifecycle.
 - Typed auth configs (`JiraAuthConfig`, `YandexTrackerAuthConfig`, `GitHubAuthConfig`).
 - Shared domain models: workspaces, projects, tasks, statuses, users, comments, relations.
+- Canonical optional task priority and work type with exact per-provider mappings for Jira, Yandex Tracker, and GitHub.
 - Task CRUD + assignee on read/write where supported; documented provider capability errors for unsupported deletion and due dates.
 - Jira, Yandex Tracker, and GitHub relation CRUD (`relates`, `blocks`, `contains`).
 - GitHub repository-backed projects, issue read/create/update/count, stable task/relation handles, pagination, pull-request filtering, and bounded concurrency.
@@ -174,7 +175,7 @@ handle API limits safely.
 
 - Yandex Tracker: four tasks, three relation types from a root task.
 - Jira (`jira.evt-s.ru`): same, with custom `contains` link mapping when configured.
-- GitHub (`depensee-dev/trackerkit`): read-only validation of connection, repository discovery, issue count/list/get, and relation reads on two existing issues; one native `contains` relation was read from both sides. No GitHub data was modified.
+- GitHub (`depensee-dev/trackerkit`): read-only validation of connection, repository discovery, issue count/list/get, and relation reads on existing issues; native `contains` relations were read from both sides. Issue `#4` also verified as canonical `priority=high`, `work_type=bug`. No GitHub data was modified.
 
 ---
 

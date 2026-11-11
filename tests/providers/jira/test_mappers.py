@@ -54,9 +54,7 @@ def test_to_user_returns_none_when_all_attrs_are_none() -> None:
 
 def test_to_user_uses_account_id_when_present() -> None:
     mapper = JiraMapper("https://jira.example.com/")
-    user = mapper._to_user(
-        _Attr(accountId="acc-1", displayName="Alice", emailAddress="a@b.com")
-    )
+    user = mapper._to_user(_Attr(accountId="acc-1", displayName="Alice", emailAddress="a@b.com"))
     assert user is not None
     assert user.id == "acc-1"
     assert user.display_name == "Alice"
@@ -84,3 +82,11 @@ def test_to_workspace_id_strips_trailing_slash_and_uses_netloc() -> None:
     mapper = JiraMapper("https://jira.example.com/sub/")
     workspace = mapper.to_workspace()
     assert workspace.id == "jira:jira.example.com"
+
+
+def test_to_task_maps_priority_and_issue_type(fake_jira_issue_payload: _Attr) -> None:
+    fake_jira_issue_payload.fields.priority = _Attr(name="Highest")
+    fake_jira_issue_payload.fields.issuetype = _Attr(name="Bug")
+    task = JiraMapper("https://jira.example.com").to_task(fake_jira_issue_payload)
+    assert task.priority is not None and task.priority.value == "high"
+    assert task.work_type is not None and task.work_type.value == "bug"

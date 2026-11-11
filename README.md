@@ -23,7 +23,7 @@ pip install trackerkit
 Install from a Git tag:
 
 ```bash
-pip install "git+https://github.com/depensee-dev/trackerkit.git@v0.4.0"
+pip install "git+https://github.com/depensee-dev/trackerkit.git@v0.4.1"
 ```
 
 Install from the `main` branch:

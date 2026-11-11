@@ -11,6 +11,17 @@ mentioned in `0.3.0` was removed in `0.4.0`.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-11
+
+### Added
+- Added canonical optional `Task.priority` and `Task.work_type` fields with public `TaskPriority` (`low`, `medium`, `high`) and `TaskWorkType` (`bug`, `feature`, `task`, `refactor`) enums.
+- Jira maps `priority.name` and `issuetype.name`; Yandex Tracker maps stable priority/type keys; GitHub maps the native issue type and the `Priority` single-select issue field.
+- Provider-specific mapping tables accept only explicitly known values. Unknown values return `None` rather than being guessed.
+
+### Tests and docs
+- Added exact mapping and mapper tests for all three providers, including GitHub `Bug + High` and unknown-value cases.
+- Documented canonical metadata and provider mappings.
+
 ## [0.4.0] - 2026-11-11
 
 ### Breaking

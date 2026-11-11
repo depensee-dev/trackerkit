@@ -3,6 +3,7 @@ from typing import Any
 
 from trackerkit.domain.models import Project, Status, Task, User, Workspace
 from trackerkit.providers.github.identifiers import GitHubTaskHandle
+from trackerkit.providers.github.metadata import normalize_priority, normalize_work_type
 
 
 class GitHubMapper:
@@ -40,6 +41,7 @@ class GitHubMapper:
         if assignee is None:
             assignees = issue.get("assignees") or []
             assignee = assignees[0] if assignees else None
+        issue_type = issue.get("type") or {}
         return Task(
             id=self.task_id(issue, repository),
             key=f"{repository['full_name']}#{issue['number']}",
@@ -47,6 +49,8 @@ class GitHubMapper:
             description=issue.get("body"),
             project_id=str(repository["id"]),
             status=self._to_status(str(issue.get("state") or "open")),
+            priority=normalize_priority(self._priority_value(issue)),
+            work_type=normalize_work_type(issue_type.get("name")),
             assignee=self._to_user(assignee),
             reporter=self._to_user(issue.get("user")),
             created_at=self._parse_datetime(issue.get("created_at")),
@@ -54,6 +58,19 @@ class GitHubMapper:
             due_date=None,
             url=issue.get("html_url"),
         )
+
+    def _priority_value(self, issue: dict[str, Any]) -> str | None:
+        for field in issue.get("issue_field_values") or []:
+            name = str(field.get("issue_field_name") or "").strip().casefold()
+            if name != "priority":
+                continue
+            option = field.get("single_select_option")
+            if isinstance(option, dict) and option.get("name") is not None:
+                return str(option["name"])
+            value = field.get("value")
+            if isinstance(value, str):
+                return value
+        return None
 
     def _to_user(self, value: dict[str, Any] | None) -> User | None:
         if not value or not value.get("login"):

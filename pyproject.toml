@@ -1,6 +1,6 @@
 [project]
 name = "trackerkit"
-version = "0.4.0"
+version = "0.4.1"
 description = "Unified async client library for Jira, Yandex Tracker, and GitHub integrations."
 readme = "README.md"
 requires-python = ">=3.12,<3.15"

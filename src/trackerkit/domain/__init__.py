@@ -1,4 +1,10 @@
-from trackerkit.domain.enums import ConnectionErrorKind, Provider, RelationType
+from trackerkit.domain.enums import (
+    ConnectionErrorKind,
+    Provider,
+    RelationType,
+    TaskPriority,
+    TaskWorkType,
+)
 from trackerkit.domain.errors import (
     AuthenticationError,
     ConfigurationError,
@@ -56,7 +62,9 @@ __all__ = [
     "RelationType",
     "Status",
     "Task",
+    "TaskPriority",
     "TaskQuery",
+    "TaskWorkType",
     "TrackerClientError",
     "TrackerKitError",
     "UpdateProjectInput",
@@ -67,4 +75,3 @@ __all__ = [
     "YandexTrackerRelationMapping",
     "YandexTrackerRelationMappingConfig",
 ]
-

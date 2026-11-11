@@ -4,6 +4,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from trackerkit.domain.models import Project, Status, Task, User, Workspace
+from trackerkit.providers.jira.metadata import normalize_priority, normalize_work_type
 
 
 class JiraMapper:
@@ -55,6 +56,10 @@ class JiraMapper:
             description=self._extract_description(getattr(fields, "description", None)),
             project_id=str(project.id) if project is not None else None,
             status=self._to_status(getattr(fields, "status", None)),
+            priority=normalize_priority(getattr(getattr(fields, "priority", None), "name", None)),
+            work_type=normalize_work_type(
+                getattr(getattr(fields, "issuetype", None), "name", None)
+            ),
             assignee=self._to_user(getattr(fields, "assignee", None)),
             reporter=self._to_user(getattr(fields, "reporter", None)),
             created_at=self._parse_datetime(getattr(fields, "created", None)),
@@ -123,4 +128,3 @@ class JiraMapper:
         if isinstance(value, str):
             return value
         return json.dumps(value, ensure_ascii=True)
-

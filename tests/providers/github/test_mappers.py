@@ -77,3 +77,47 @@ def test_parse_datetime_normalizes_naive_value() -> None:
     parsed = GitHubMapper()._parse_datetime("2025-01-01T10:00:00")
     assert parsed == datetime(2025, 1, 1, 10, tzinfo=UTC)
     assert GitHubMapper()._parse_datetime("invalid") is None
+
+
+def test_to_task_maps_native_type_and_priority_field(
+    fake_github_repository_payload: dict,
+    fake_github_issue_payload: dict,
+) -> None:
+    issue = {
+        **fake_github_issue_payload,
+        "type": {"name": "Bug"},
+        "issue_field_values": [
+            {
+                "issue_field_name": "Priority",
+                "data_type": "single_select",
+                "single_select_option": {"name": "High"},
+            },
+            {
+                "issue_field_name": "Effort",
+                "data_type": "single_select",
+                "single_select_option": {"name": "High"},
+            },
+        ],
+    }
+    task = GitHubMapper().to_task(issue, fake_github_repository_payload)
+    assert task.priority is not None and task.priority.value == "high"
+    assert task.work_type is not None and task.work_type.value == "bug"
+
+
+def test_to_task_does_not_guess_unknown_metadata(
+    fake_github_repository_payload: dict,
+    fake_github_issue_payload: dict,
+) -> None:
+    issue = {
+        **fake_github_issue_payload,
+        "type": {"name": "Enhancement"},
+        "issue_field_values": [
+            {
+                "issue_field_name": "Priority",
+                "single_select_option": {"name": "Critical"},
+            }
+        ],
+    }
+    task = GitHubMapper().to_task(issue, fake_github_repository_payload)
+    assert task.priority is None
+    assert task.work_type is None

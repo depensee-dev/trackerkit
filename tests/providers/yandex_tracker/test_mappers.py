@@ -28,3 +28,17 @@ def test_to_user_falls_back_to_login_when_no_uid_or_id() -> None:
     assert user is not None
     assert user.id == "alice"
     assert user.display_name == "alice"
+
+
+def test_to_task_maps_priority_and_type_by_provider_keys() -> None:
+    issue = _Attr(
+        id="1",
+        key="QUEUE-1",
+        summary="Demo",
+        queue=_Attr(key="QUEUE"),
+        priority={"key": "major", "display": "Высокий"},
+        type={"key": "bug", "display": "Ошибка"},
+    )
+    task = YandexTrackerMapper("workspace-id").to_task(issue)
+    assert task.priority is not None and task.priority.value == "high"
+    assert task.work_type is not None and task.work_type.value == "bug"

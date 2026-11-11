@@ -19,6 +19,8 @@ await client.delete_task(task_id: str) -> None
 - `description`: `str | None`
 - `project_id`: `str | None`
 - `status`: `Status | None`
+- `priority`: `TaskPriority | None` — `low`, `medium`, or `high`
+- `work_type`: `TaskWorkType | None` — `bug`, `feature`, `task`, or `refactor`
 - `assignee`: `User | None`
 - `reporter`: `User | None`
 - `created_at`: `datetime | None`
@@ -58,6 +60,28 @@ await client.delete_task(task_id: str) -> None
 - In `Yandex Tracker`, direct issue deletion is unsupported by the adapter.
 - Some status transitions depend on provider-specific rules and permissions.
 - The public library API is async, while some provider transports may wrap sync SDKs internally.
+
+## Canonical priority and work type
+
+The shared fields are optional. Each provider has an explicit mapping table;
+unknown values return `None` and are never inferred from aliases or localized
+labels.
+
+| Canonical value | Jira | Yandex Tracker (stable keys) | GitHub |
+| --- | --- | --- | --- |
+| `priority=low` | `Lowest`, `Low` | `trivial`, `minor` | `Low` |
+| `priority=medium` | `Medium` | `normal` | `Medium` |
+| `priority=high` | `High`, `Highest` | `major`, `critical`, `blocker` | `High` |
+| `work_type=bug` | `Bug` | `bug` | `Bug` |
+| `work_type=feature` | `Story` | `story`, `improvement`, `newFeature` | `Feature` |
+| `work_type=task` | `Task`, `Sub-task` | `task`, `subtask` | `Task` |
+| `work_type=refactor` | `Refactor`, `Refactoring` | `refactor`, `refactoring` | `Refactor` |
+
+Jira reads `priority.name` and `issuetype.name`. Yandex reads the `key` of its
+priority/type objects, so localization of `display` does not affect mapping.
+GitHub reads native `type.name` and the single-select issue field named exactly
+`Priority` (case-insensitive) from `issue_field_values`. Other GitHub fields,
+including `Effort`, are not mapped to these properties.
 
 ## GitHub Mapping and Limits
 - `Task` maps to an issue inside a repository; pull requests returned by Issues endpoints are excluded.
