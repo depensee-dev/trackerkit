@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 
+from trackerkit.domain.enums import TaskState
 from trackerkit.providers.github.mappers import GitHubMapper
 
 
@@ -17,6 +18,7 @@ def test_to_task_maps_github_issue(
     assert task.status is not None
     assert task.status.id == "open"
     assert task.status.category == "todo"
+    assert task.state is TaskState.OPEN
     assert task.assignee is not None
     assert task.assignee.id == "octocat"
     assert task.reporter is not None
@@ -44,6 +46,7 @@ def test_to_task_uses_first_assignee_and_closed_status(
     assert task.status is not None
     assert task.status.id == "closed"
     assert task.status.category == "done"
+    assert task.state is TaskState.DONE
     assert task.assignee is not None
     assert task.assignee.id == "alice"
 

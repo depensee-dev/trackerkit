@@ -145,9 +145,9 @@ When `JIRA_CONTAINS_LINK_TYPES` is set and `JIRA_CONTAINS_MODE` is not set,
 ## Provider Capability Summary
 | Provider | Relations | Users | Comments |
 | --- | --- | --- | --- |
-| Jira | implemented for core relation types | not implemented | not implemented |
-| Yandex Tracker | implemented for core relation types | not implemented | not implemented |
-| GitHub | implemented for core relation types | not implemented | not implemented |
+| Jira | implemented for core relation types | not implemented | list and create |
+| Yandex Tracker | implemented for core relation types | not implemented | list and create |
+| GitHub | implemented for core relation types | not implemented | list and create |
 
 ## Sources
 - GitHub: [Issues and related issues](https://docs.github.com/en/rest/issues/issues)

@@ -2,6 +2,7 @@ import asyncio
 import os
 import random
 import string
+from datetime import UTC, datetime
 
 from _base import wait_for_enter
 from _env import load_env
@@ -12,6 +13,9 @@ from trackerkit import (
     CreateTaskInput,
     ProviderCapabilityError,
     RelationType,
+    TaskPriority,
+    TaskState,
+    TaskWorkType,
     TrackerClient,
     TrackerClientError,
     UpdateProjectInput,
@@ -108,19 +112,39 @@ async def main() -> None:
                         f"Example Yandex Tracker task {index} created for relation CRUD validation."
                     ),
                     project_id=project.key or project.id,
+                    state=TaskState.OPEN if index == 1 else None,
+                    priority=TaskPriority.HIGH if index == 1 else None,
+                    work_type=TaskWorkType.BUG if index == 1 else None,
+                    start_date=datetime(2026, 11, 20, tzinfo=UTC) if index == 1 else None,
+                    due_date=datetime(2026, 11, 27, tzinfo=UTC) if index == 1 else None,
                 )
             )
             created_tasks.append(task)
             print(task)
 
-        await client.get_task(created_tasks[0].id)
-        wait_for_enter("Tasks created. Check them in Yandex Tracker before task update.")
-
-        created_tasks[0] = await client.update_task(
-            created_tasks[0].id,
-            UpdateTaskInput(description="Updated Yandex relation example root task."),
-        )
+        created_tasks[0] = await client.get_task(created_tasks[0].id)
+        print("yandex_tracker: root task fields")
         print(created_tasks[0])
+        wait_for_enter("Root task fields read. Check them in Yandex Tracker before the update.")
+
+        update = {
+            "title": "Prepare release notes (updated)",
+            "description": "Updated Yandex relation example root task.",
+            "state": TaskState.DONE,
+            "priority": TaskPriority.LOW,
+            "work_type": TaskWorkType.TASK,
+            "start_date": datetime(2026, 11, 21, tzinfo=UTC),
+            "due_date": datetime(2026, 11, 28, tzinfo=UTC),
+        }
+        if created_tasks[0].reporter is not None:
+            update["assignee_id"] = created_tasks[0].reporter.id
+        await client.update_task(created_tasks[0].id, UpdateTaskInput(**update))
+        created_tasks[0] = await client.get_task(created_tasks[0].id)
+        print("yandex_tracker: root task fields after update")
+        print(created_tasks[0])
+        wait_for_enter(
+            "Root task fields updated and read again. Check them in Yandex Tracker before relation creation."
+        )
 
         root_task, blocked_task, related_task, child_task = created_tasks
         relation_specs = (

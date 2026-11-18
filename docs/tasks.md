@@ -19,12 +19,14 @@ await client.delete_task(task_id: str) -> None
 - `description`: `str | None`
 - `project_id`: `str | None`
 - `status`: `Status | None`
+- `state`: `open` | `done` | `None` — portable state derived from the provider status. `Status.category` stays the provider's own category
 - `priority`: `TaskPriority | None` — `low`, `medium`, or `high`
 - `work_type`: `TaskWorkType | None` — `bug`, `feature`, `task`, or `refactor`
 - `assignee`: `User | None`
 - `reporter`: `User | None`
 - `created_at`: `datetime | None`
 - `updated_at`: `datetime | None`
+- `start_date`: `datetime | None`
 - `due_date`: `datetime | None`
 - `url`: `str | None`
 
@@ -40,7 +42,11 @@ await client.delete_task(task_id: str) -> None
 - `description`: `str | None`
 - `project_id`: `str | None`
 - `assignee_id`: `str | None`
-- `status_id`: `str | None`
+- `status_id`: `str | None` — exact provider status. Mutually exclusive with `state`
+- `state`: `open` | `done` | `None` — portable state. Mutually exclusive with `status_id`
+- `priority`: `low` | `medium` | `high` | `None`
+- `work_type`: `bug` | `feature` | `task` | `refactor` | `None`
+- `start_date`: `datetime | None`
 - `due_date`: `datetime | None`
 
 ### UpdateTaskInput
@@ -48,7 +54,13 @@ await client.delete_task(task_id: str) -> None
 - `description`: `str | None`
 - `assignee_id`: `str | None`
 - `status_id`: `str | None`
+- `state`: `open` | `done` | `None`
+- `priority`: `low` | `medium` | `high` | `None`
+- `work_type`: `bug` | `feature` | `task` | `refactor` | `None`
+- `start_date`: `datetime | None`
 - `due_date`: `datetime | None`
+
+On update, a field that was not passed stays unchanged. An explicit `null` clears assignee and dates where the provider can store a clear. `status_id` and `state` cannot both be set. The task author is read-only.
 
 ## Notes
 - `get_task()` returns one task by provider-specific identifier.
@@ -90,12 +102,14 @@ including `Effort`, are not mapped to these properties.
 - `Task.project_id` is the numeric repository ID.
 - `title`, `description`, `assignee`, `reporter`, timestamps, and `url` map to `title`, `body`, `assignee`, `user`, `created_at` / `updated_at`, and `html_url`.
 - `User.id` is the GitHub login because issue filters and assignee writes accept logins.
-- Only `open` and `closed` status IDs are supported. Categories are `todo` and `done` respectively. GitHub Projects status fields are not issue workflow states and are not mapped.
-- GitHub issues have no native per-issue due date. Passing `due_date` raises `ProviderCapabilityError`; milestone due dates are not substituted.
-- Creating a closed issue is implemented as create followed by close.
+- Only `open` and `closed` status IDs are supported. Categories are `todo` and `done` respectively. `Task.state` is `open` or `done`. GitHub Projects status fields are not issue workflow states and are not mapped.
+- `start_date` is written to a date issue field named `Start date`. `due_date` is written to `Due date`, or to `Target date` when `Due date` is absent. Milestone dates are not used. A missing field leaves the value unset.
+- `priority` and the start/due dates are issue fields of the repository owner. An organization is read at `/orgs/{org}/issue-fields`; a personal account is read at `/user/issue-fields`, and only when that account is the authenticated user. The repository `owner.type` selects the route. A missing permission leaves the value unset.
+- `work_type` is an enabled issue type from `/repos/{owner}/{repo}/issue-types` (`Bug`, `Feature`, `Task`, or `Refactor`).
+- Creating a done issue is implemented as create followed by close.
+- `delete_task()` uses the GraphQL `deleteIssue` mutation. `issueId` is the issue `node_id` from the REST issue payload. Closing an issue is not deletion.
 - Updating `assignee_id` sends a one-element `assignees` list and therefore replaces the existing assignee set, consistent with the canonical single-assignee model.
 - Multiple assignees are otherwise collapsed to the first provider `assignee` on read.
-- `delete_task()` is unsupported; closing an issue is not treated as deletion.
 - GitHub relation reads use several native endpoints per issue. The transport limits concurrency per client, and callers should avoid unbounded fan-out across large repositories.
 
 ## Provider Mapping

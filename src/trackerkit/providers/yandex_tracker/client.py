@@ -1,9 +1,13 @@
+from datetime import datetime
 from typing import Any
 
 from trackerkit.contracts.auth import YandexTrackerAuthConfig
+from trackerkit.domain.enums import TaskPriority, TaskState, TaskWorkType
 from trackerkit.domain.errors import ProviderCapabilityError, ProviderError
 from trackerkit.domain.models import (
+    Comment,
     ConnectionDiagnostic,
+    CreateCommentInput,
     CreateProjectInput,
     CreateRelationInput,
     CreateTaskInput,
@@ -19,6 +23,11 @@ from trackerkit.domain.models import (
 from trackerkit.domain.relation_mapping import RelationMappingConfig
 from trackerkit.providers.base import BaseTaskTrackerAdapter
 from trackerkit.providers.yandex_tracker.mappers import YandexTrackerMapper
+from trackerkit.providers.yandex_tracker.metadata import (
+    priority_key,
+    status_key_for_state,
+    work_type_key,
+)
 from trackerkit.providers.yandex_tracker.queries import YandexTrackerQueryPolicy
 from trackerkit.providers.yandex_tracker.relations import (
     YandexTrackerRelationPolicy,
@@ -34,16 +43,14 @@ class YandexTrackerClient(BaseTaskTrackerAdapter):
         config: YandexTrackerAuthConfig,
         relation_mapping: RelationMappingConfig | None = None,
     ) -> None:
-        workspace_id = str(
-            config.cloud_org_id or config.org_id or "yandex-tracker"
-        )
+        workspace_id = str(config.cloud_org_id or config.org_id or "yandex-tracker")
         self._transport = YandexTrackerTransport(config)
         self._mapper = YandexTrackerMapper(workspace_id)
         self._queries = YandexTrackerQueryPolicy()
         effective_mapping = relation_mapping or RelationMappingConfig()
-        self._relations = YandexTrackerRelationPolicy(
-            effective_mapping.yandex_tracker
-        )
+        self._relations = YandexTrackerRelationPolicy(effective_mapping.yandex_tracker)
+        self._priority_keys: set[str] | None = None
+        self._issue_type_keys: dict[str, set[str]] = {}
 
     async def check_connection(self) -> bool:
         return await self._transport.check_connection()
@@ -90,26 +97,50 @@ class YandexTrackerClient(BaseTaskTrackerAdapter):
             data["assignee"] = payload.assignee_id
         if payload.status_id is not None:
             data["status"] = payload.status_id
+        if payload.start_date is not None:
+            data["start"] = _date_text(payload.start_date)
         if payload.due_date is not None:
-            data["deadline"] = payload.due_date.date().isoformat()
+            data["deadline"] = _date_text(payload.due_date)
+        priority = await self._known_priority(payload.priority)
+        if priority is not None:
+            data["priority"] = priority
+        work_type = await self._known_work_type(payload.project_id, payload.work_type)
+        if work_type is not None:
+            data["type"] = work_type
         issue = await self._transport.create_issue(data)
+        if payload.state is not None and await self._move_to_state(issue, payload.state):
+            issue = await self._transport.get_issue(str(issue.id))
         return self._mapper.to_task(issue)
 
     async def update_task(self, task_id: str, payload: UpdateTaskInput) -> Task:
         issue = await self._transport.get_issue(task_id)
+        project_id = str(getattr(getattr(issue, "queue", None), "key", "") or "")
         data: dict[str, Any] = {}
-        if payload.title is not None:
+        if payload.provides("title") and payload.title is not None:
             data["summary"] = payload.title
-        if payload.description is not None:
-            data["description"] = payload.description
-        if payload.assignee_id is not None:
+        if payload.provides("description"):
+            data["description"] = payload.description or ""
+        if payload.provides("assignee_id"):
             data["assignee"] = payload.assignee_id
-        if payload.status_id is not None:
+        if payload.provides("status_id") and payload.status_id is not None:
             data["status"] = payload.status_id
-        if payload.due_date is not None:
-            data["deadline"] = payload.due_date.date().isoformat()
+        if payload.provides("start_date"):
+            data["start"] = _date_text(payload.start_date)
+        if payload.provides("due_date"):
+            data["deadline"] = _date_text(payload.due_date)
+        if payload.provides("priority") and payload.priority is not None:
+            priority = await self._known_priority(payload.priority)
+            if priority is not None:
+                data["priority"] = priority
+        if payload.provides("work_type") and payload.work_type is not None:
+            work_type = await self._known_work_type(project_id, payload.work_type)
+            if work_type is not None:
+                data["type"] = work_type
         if data:
             await self._transport.update_issue(issue, data)
+        moved = payload.state is not None and await self._move_to_state(issue, payload.state)
+        if data or moved:
+            issue = await self._transport.get_issue(task_id)
         return self._mapper.to_task(issue)
 
     async def delete_task(self, task_id: str) -> None:
@@ -118,6 +149,74 @@ class YandexTrackerClient(BaseTaskTrackerAdapter):
             "Close or move the issue instead, or delete the parent queue/project "
             "when the workflow allows it."
         )
+
+    async def list_comments(self, task_id: str) -> list[Comment]:
+        issue = await self._transport.get_issue(task_id)
+        comments = await self._transport.list_comments(issue)
+        return [self._mapper.to_comment(task_id, comment) for comment in comments]
+
+    async def create_comment(self, payload: CreateCommentInput) -> Comment:
+        issue = await self._transport.get_issue(payload.task_id)
+        comment = await self._transport.create_comment(issue, payload.body)
+        return self._mapper.to_comment(payload.task_id, comment)
+
+    async def _move_to_state(self, issue: Any, state: TaskState) -> bool:
+        transitions = await self._transport.list_transitions(issue)
+        keyed = [
+            (key, transition)
+            for transition in transitions
+            if (key := _record_key(getattr(transition, "to", None)))
+        ]
+        match = status_key_for_state([key for key, _ in keyed], state)
+        if match is None:
+            return False
+        for key, transition in keyed:
+            if key == match:
+                await self._transport.execute_transition(issue, transition)
+                return True
+        return False
+
+    async def _known_priority(self, priority: TaskPriority | None) -> str | None:
+        if priority is None:
+            return None
+        key = priority_key(priority)
+        if key.casefold() not in await self._load_priority_keys():
+            return None
+        return key
+
+    async def _known_work_type(
+        self,
+        project_id: str,
+        work_type: TaskWorkType | None,
+    ) -> str | None:
+        if work_type is None or not project_id:
+            return None
+        key = work_type_key(work_type)
+        if key.casefold() not in await self._load_issue_type_keys(project_id):
+            return None
+        return key
+
+    async def _load_priority_keys(self) -> set[str]:
+        if self._priority_keys is not None:
+            return self._priority_keys
+        try:
+            priorities = await self._transport.list_priorities()
+        except ProviderError:
+            return set()
+        self._priority_keys = {key.casefold() for item in priorities if (key := _record_key(item))}
+        return self._priority_keys
+
+    async def _load_issue_type_keys(self, project_id: str) -> set[str]:
+        cached = self._issue_type_keys.get(project_id)
+        if cached is not None:
+            return cached
+        try:
+            issue_types = await self._transport.list_queue_issue_types(project_id)
+        except ProviderError:
+            return set()
+        keys = {key.casefold() for item in issue_types if (key := _record_key(item))}
+        self._issue_type_keys[project_id] = keys
+        return keys
 
     async def list_workspaces(self) -> list[Workspace]:
         return [self._mapper.to_workspace()]
@@ -280,3 +379,24 @@ class YandexTrackerClient(BaseTaskTrackerAdapter):
         issue_id, link_id = parsed_relation_id
         await self._transport.delete_issue_link(issue_id, link_id)
 
+
+def _date_text(value: datetime | None) -> str | None:
+    if value is None:
+        return None
+    return value.date().isoformat()
+
+
+def _record_key(value: Any) -> str | None:
+    if value is None or isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        for name in ("key", "id", "name"):
+            item = value.get(name)
+            if item:
+                return str(item)
+        return None
+    for name in ("key", "id", "name"):
+        item = getattr(value, name, None)
+        if item:
+            return str(item)
+    return None

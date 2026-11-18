@@ -8,7 +8,11 @@ from trackerkit.contracts.auth import GitHubAuthConfig
 from trackerkit.domain.enums import Provider
 from trackerkit.domain.errors import ProviderError, get_error_kind
 from trackerkit.domain.models import ConnectionDiagnostic
-from trackerkit.providers.github.errors import GitHubNotFoundError, raise_github_error
+from trackerkit.providers.github.errors import (
+    GitHubForbiddenError,
+    GitHubNotFoundError,
+    raise_github_error,
+)
 
 
 class GitHubTransport:
@@ -300,3 +304,123 @@ class GitHubTransport:
             "DELETE",
             f"{self._repository_path(repository)}/issues/{issue_number}/relates_to/{related_issue_id}",
         )
+
+    async def delete_issue(self, node_id: str) -> None:
+        # The Issues REST reference has no delete route. Deletion is the
+        # documented GraphQL mutation `deleteIssue`; `issueId` is the issue
+        # `node_id` returned by the REST issue payload.
+        response = await self._request(
+            "POST",
+            "/graphql",
+            json_body={
+                "query": (
+                    "mutation($issueId: ID!) {"
+                    " deleteIssue(input: {issueId: $issueId}) { clientMutationId }"
+                    " }"
+                ),
+                "variables": {"issueId": node_id},
+            },
+        )
+        payload = response.json()
+        errors = payload.get("errors") if isinstance(payload, dict) else None
+        if not errors:
+            return
+        first = errors[0]
+        message = first.get("message") if isinstance(first, dict) else None
+        detail = message or "GitHub API deleteIssue failed."
+        raise ProviderError(f"GitHub API deleteIssue failed: {detail}")
+
+    async def list_issue_field_values(
+        self,
+        repository: dict[str, Any],
+        issue_number: int,
+    ) -> list[dict[str, Any]]:
+        return await self._paginated(
+            f"{self._repository_path(repository)}/issues/{issue_number}/issue-field-values"
+        )
+
+    async def list_comments(
+        self,
+        repository: dict[str, Any],
+        issue_number: int,
+    ) -> list[dict[str, Any]]:
+        return await self._paginated(
+            f"{self._repository_path(repository)}/issues/{issue_number}/comments"
+        )
+
+    async def create_comment(
+        self,
+        repository: dict[str, Any],
+        issue_number: int,
+        body: str,
+    ) -> dict[str, Any]:
+        response = await self._request(
+            "POST",
+            f"{self._repository_path(repository)}/issues/{issue_number}/comments",
+            json_body={"body": body},
+        )
+        return response.json()
+
+    async def list_issue_types(self, repository: dict[str, Any]) -> list[dict[str, Any]]:
+        # Enabled types inherited from the owner. Same route for a user and an organization.
+        # https://docs.github.com/en/rest/repos/issue-types
+        try:
+            return await self._paginated(f"{self._repository_path(repository)}/issue-types")
+        except (GitHubNotFoundError, GitHubForbiddenError):
+            return await self._list_owner_catalog(repository, "issue-types")
+
+    async def list_issue_fields(self, repository: dict[str, Any]) -> list[dict[str, Any]]:
+        # No repository route. Organization: /orgs/{org}/issue-fields.
+        # Personal account: /user/issue-fields, and only for the authenticated user.
+        return await self._list_owner_catalog(repository, "issue-fields")
+
+    async def _list_owner_catalog(
+        self,
+        repository: dict[str, Any],
+        name: str,
+    ) -> list[dict[str, Any]]:
+        owner = repository.get("owner") or {}
+        login = str(owner.get("login") or "")
+        kind = str(owner.get("type") or "").casefold()
+        if kind == "organization":
+            if not login:
+                return []
+            path = f"/orgs/{login}/{name}"
+        else:
+            try:
+                user = await self.get_current_user()
+            except (GitHubNotFoundError, GitHubForbiddenError):
+                return []
+            if str(user.get("login") or "").casefold() != login.casefold():
+                return []
+            path = f"/user/{name}"
+        try:
+            return await self._paginated(path)
+        except (GitHubNotFoundError, GitHubForbiddenError):
+            return []
+
+    async def add_issue_field_values(
+        self,
+        repository: dict[str, Any],
+        issue_number: int,
+        values: list[dict[str, Any]],
+    ) -> None:
+        await self._request(
+            "POST",
+            f"{self._repository_path(repository)}/issues/{issue_number}/issue-field-values",
+            json_body={"issue_field_values": values},
+        )
+
+    async def delete_issue_field_value(
+        self,
+        repository: dict[str, Any],
+        issue_number: int,
+        field_id: int,
+    ) -> None:
+        try:
+            await self._request(
+                "DELETE",
+                f"{self._repository_path(repository)}/issues/{issue_number}/issue-field-values/{field_id}",
+            )
+        except GitHubNotFoundError:
+            return

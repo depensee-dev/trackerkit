@@ -4,9 +4,10 @@ from unittest.mock import AsyncMock
 import pytest
 
 from trackerkit.contracts.auth import GitHubAuthConfig
-from trackerkit.domain.enums import RelationType
+from trackerkit.domain.enums import RelationType, TaskPriority, TaskState, TaskWorkType
 from trackerkit.domain.errors import ProviderCapabilityError, ProviderError
 from trackerkit.domain.models import (
+    CreateCommentInput,
     CreateProjectInput,
     CreateRelationInput,
     CreateTaskInput,
@@ -63,6 +64,7 @@ def _client(repositories: list[dict[str, Any]] | None = None) -> GitHubClient:
         repository for repository in repositories if repository["full_name"] == full_name
     )
     transport.list_repositories.return_value = repositories
+    transport.list_issue_field_values.return_value = []
     client._transport = transport
     return client
 
@@ -136,17 +138,70 @@ async def test_create_task_supports_closed_status() -> None:
 
 
 @pytest.mark.asyncio
-async def test_create_task_rejects_due_date_before_writing() -> None:
-    client = _client()
-    with pytest.raises(ProviderCapabilityError):
-        await client.create_task(
-            CreateTaskInput(
-                title="Demo",
-                project_id="501",
-                due_date="2025-01-02T00:00:00Z",
-            )
+async def test_create_task_leaves_due_date_unset_when_the_field_is_missing() -> None:
+    repository = _repository()
+    client = _client([repository])
+    client._transport.list_issue_types.return_value = []
+    client._transport.list_issue_fields.return_value = []
+    client._transport.create_issue.return_value = _issue(repository=repository)
+    task = await client.create_task(
+        CreateTaskInput(
+            title="Demo",
+            project_id="501",
+            due_date="2025-01-02T00:00:00Z",
         )
-    client._transport.create_issue.assert_not_awaited()
+    )
+    assert task.due_date is None
+    client._transport.create_issue.assert_awaited_once()
+    client._transport.add_issue_field_values.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_create_task_writes_type_and_priority_when_the_repository_has_them() -> None:
+    repository = _repository()
+    client = _client([repository])
+    created = _issue(repository=repository)
+    client._transport.list_issue_types.return_value = [{"name": "Bug", "is_enabled": True}]
+    client._transport.list_issue_fields.return_value = [
+        {
+            "id": 7,
+            "name": "Priority",
+            "data_type": "single_select",
+            "options": [{"name": "High"}],
+        }
+    ]
+    client._transport.create_issue.return_value = created
+    client._transport.get_issue.return_value = {
+        **created,
+        "type": {"name": "Bug"},
+        "issue_field_values": [
+            {
+                "issue_field_name": "Priority",
+                "data_type": "single_select",
+                "single_select_option": {"name": "High"},
+            }
+        ],
+    }
+    task = await client.create_task(
+        CreateTaskInput(
+            title="Demo",
+            project_id="501",
+            priority=TaskPriority.HIGH,
+            work_type=TaskWorkType.BUG,
+        )
+    )
+    assert task.priority is TaskPriority.HIGH
+    assert task.work_type is TaskWorkType.BUG
+    assert task.state is TaskState.OPEN
+    client._transport.create_issue.assert_awaited_once_with(
+        repository,
+        {"title": "Demo", "type": "Bug"},
+    )
+    client._transport.add_issue_field_values.assert_awaited_once_with(
+        repository,
+        42,
+        [{"field_id": 7, "value": "High"}],
+    )
 
 
 @pytest.mark.asyncio
@@ -252,10 +307,35 @@ async def test_relation_create_and_delete_use_native_endpoints(relation_type: Re
 
 
 @pytest.mark.asyncio
+async def test_delete_task_uses_graphql_node_id() -> None:
+    repository = _repository()
+    client = _client([repository])
+    client._transport.get_issue.return_value = _issue(repository=repository, node_id="I_kwDOA")
+    await client.delete_task(_task_id())
+    client._transport.delete_issue.assert_awaited_once_with("I_kwDOA")
+
+
+@pytest.mark.asyncio
+async def test_comments_use_issue_endpoints() -> None:
+    repository = _repository()
+    client = _client([repository])
+    client._transport.list_comments.return_value = [
+        {"id": 9, "body": "Noted", "user": {"login": "octocat"}}
+    ]
+    client._transport.create_comment.return_value = {
+        "id": 10,
+        "body": "Hello",
+        "user": {"login": "octocat"},
+    }
+    comments = await client.list_comments(_task_id())
+    created = await client.create_comment(CreateCommentInput(task_id=_task_id(), body="Hello"))
+    assert comments[0].body == "Noted"
+    assert created.id == "10"
+
+
+@pytest.mark.asyncio
 async def test_unsupported_writes_are_explicit() -> None:
     client = _client()
-    with pytest.raises(ProviderCapabilityError):
-        await client.delete_task(_task_id())
     with pytest.raises(ProviderCapabilityError):
         await client.create_project(CreateProjectInput(name="demo"))
     with pytest.raises(ProviderCapabilityError):

@@ -1,7 +1,8 @@
-from trackerkit.domain.enums import TaskPriority, TaskWorkType
+from trackerkit.domain.enums import TaskPriority, TaskState, TaskWorkType
 from trackerkit.providers.yandex_tracker.metadata import (
     normalize_priority,
     normalize_work_type,
+    status_key_for_state,
 )
 
 
@@ -22,6 +23,13 @@ def test_yandex_work_type_mapping_is_explicit() -> None:
     assert normalize_work_type("task") is TaskWorkType.TASK
     assert normalize_work_type("subtask") is TaskWorkType.TASK
     assert normalize_work_type("refactoring") is TaskWorkType.REFACTOR
+
+
+def test_yandex_status_key_matches_portable_state() -> None:
+    keys = ["open", "inProgress", "closed"]
+    assert status_key_for_state(keys, TaskState.OPEN) == "open"
+    assert status_key_for_state(keys, TaskState.DONE) == "closed"
+    assert status_key_for_state(["inProgress"], TaskState.DONE) is None
 
 
 def test_yandex_unknown_metadata_is_not_guessed() -> None:

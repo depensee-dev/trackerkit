@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 from typing import Any
 from urllib.parse import urlparse
 
@@ -6,7 +7,9 @@ from trackerkit.contracts.auth import GitHubAuthConfig
 from trackerkit.domain.enums import RelationType
 from trackerkit.domain.errors import ProviderCapabilityError, ProviderError
 from trackerkit.domain.models import (
+    Comment,
     ConnectionDiagnostic,
+    CreateCommentInput,
     CreateProjectInput,
     CreateRelationInput,
     CreateTaskInput,
@@ -21,6 +24,8 @@ from trackerkit.domain.models import (
 )
 from trackerkit.domain.relation_mapping import RelationMappingConfig
 from trackerkit.providers.base import BaseTaskTrackerAdapter
+from trackerkit.providers.github.errors import GitHubForbiddenError, GitHubNotFoundError
+from trackerkit.providers.github.fields import GitHubIssueCatalog, build_catalog
 from trackerkit.providers.github.identifiers import GitHubTaskHandle
 from trackerkit.providers.github.mappers import GitHubMapper
 from trackerkit.providers.github.queries import GitHubQueryBuilder
@@ -41,6 +46,7 @@ class GitHubClient(BaseTaskTrackerAdapter):
         self._queries = GitHubQueryBuilder()
         self._relations = GitHubRelationPolicy()
         self._repository_cache: dict[str, dict[str, Any]] = {}
+        self._catalog_cache: dict[str, GitHubIssueCatalog] = {}
 
     async def check_connection(self) -> bool:
         return await self._transport.check_connection()
@@ -111,7 +117,7 @@ class GitHubClient(BaseTaskTrackerAdapter):
         issue = await self._transport.get_issue(repository, handle.issue_number)
         if int(issue.get("id", 0)) != handle.issue_id:
             raise ProviderError("GitHub task id does not match the issue returned by the API.")
-        return issue, repository
+        return await self._with_field_values(repository, handle.issue_number, issue), repository
 
     @staticmethod
     def _require_project_id(project_id: str | None) -> str:
@@ -149,49 +155,189 @@ class GitHubClient(BaseTaskTrackerAdapter):
 
     async def create_task(self, payload: CreateTaskInput) -> Task:
         project_id = self._require_project_id(payload.project_id)
-        self._queries.validate_status(payload.status_id)
-        if payload.due_date is not None:
-            raise ProviderCapabilityError("GitHub issues do not have a native due_date field.")
+        repository = await self._get_repository(project_id)
+        catalog = await self._catalog_for(repository, payload)
         data: dict[str, Any] = {"title": payload.title}
         if payload.description is not None:
             data["body"] = payload.description
         if payload.assignee_id is not None:
             data["assignees"] = [payload.assignee_id]
-        repository = await self._get_repository(project_id)
+        type_name = catalog.type_name(payload.work_type) if payload.work_type else None
+        if type_name is not None:
+            data["type"] = type_name
         issue = await self._transport.create_issue(repository, data)
-        if payload.status_id == "closed":
+        number = int(issue["number"])
+        issue_state_value = self._queries.resolve_issue_state(payload.status_id, payload.state)
+        if issue_state_value == "closed":
             issue = await self._transport.update_issue(
                 repository,
-                int(issue["number"]),
+                number,
                 {"state": "closed"},
             )
+        if await self._write_issue_fields(repository, number, catalog, payload):
+            issue = await self._transport.get_issue(repository, number)
+        issue = await self._with_field_values(repository, number, issue)
         return self._mapper.to_task(issue, repository)
 
     async def update_task(self, task_id: str, payload: UpdateTaskInput) -> Task:
-        self._queries.validate_status(payload.status_id)
-        if payload.due_date is not None:
-            raise ProviderCapabilityError("GitHub issues do not have a native due_date field.")
         handle = GitHubTaskHandle.parse(task_id)
         issue, repository = await self._read_issue(handle)
+        catalog = await self._catalog_for(repository, payload)
         data: dict[str, Any] = {}
-        if payload.title is not None:
+        if payload.provides("title") and payload.title is not None:
             data["title"] = payload.title
-        if payload.description is not None:
+        if payload.provides("description"):
             data["body"] = payload.description
-        if payload.assignee_id is not None:
-            data["assignees"] = [payload.assignee_id]
-        if payload.status_id is not None:
-            data["state"] = payload.status_id
+        if payload.provides("assignee_id"):
+            data["assignees"] = [payload.assignee_id] if payload.assignee_id is not None else []
+        issue_state_value = self._issue_state_update(payload)
+        if issue_state_value is not None:
+            data["state"] = issue_state_value
+        if payload.provides("work_type"):
+            if payload.work_type is None and catalog.type_names:
+                data["type"] = None
+            elif payload.work_type is not None:
+                type_name = catalog.type_name(payload.work_type)
+                if type_name is not None:
+                    data["type"] = type_name
         if data:
             issue = await self._transport.update_issue(
                 repository,
                 handle.issue_number,
                 data,
             )
+        if await self._write_issue_fields(repository, handle.issue_number, catalog, payload):
+            issue = await self._transport.get_issue(repository, handle.issue_number)
+        issue = await self._with_field_values(repository, handle.issue_number, issue)
         return self._mapper.to_task(issue, repository)
 
     async def delete_task(self, task_id: str) -> None:
-        raise self._unsupported("delete_task")
+        handle = GitHubTaskHandle.parse(task_id)
+        repository = await self._get_repository(str(handle.repository_id))
+        issue = await self._transport.get_issue(repository, handle.issue_number)
+        if int(issue.get("id", 0)) != handle.issue_id:
+            raise ProviderError("GitHub task id does not match the issue returned by the API.")
+        node_id = issue.get("node_id")
+        if not isinstance(node_id, str) or not node_id:
+            raise ProviderError("GitHub issue response does not include node_id.")
+        await self._transport.delete_issue(node_id)
+
+    async def list_comments(self, task_id: str) -> list[Comment]:
+        handle = GitHubTaskHandle.parse(task_id)
+        repository = await self._get_repository(str(handle.repository_id))
+        comments = await self._transport.list_comments(repository, handle.issue_number)
+        return [self._mapper.to_comment(task_id, comment) for comment in comments]
+
+    async def create_comment(self, payload: CreateCommentInput) -> Comment:
+        handle = GitHubTaskHandle.parse(payload.task_id)
+        repository = await self._get_repository(str(handle.repository_id))
+        comment = await self._transport.create_comment(
+            repository,
+            handle.issue_number,
+            payload.body,
+        )
+        return self._mapper.to_comment(payload.task_id, comment)
+
+    async def _with_field_values(
+        self,
+        repository: dict[str, Any],
+        issue_number: int,
+        issue: dict[str, Any],
+    ) -> dict[str, Any]:
+        if "issue_field_values" in issue:
+            return issue
+        try:
+            values = await self._transport.list_issue_field_values(repository, issue_number)
+        except (GitHubNotFoundError, GitHubForbiddenError):
+            return issue
+        return {**issue, "issue_field_values": values}
+
+    def _issue_state_update(self, payload: UpdateTaskInput) -> str | None:
+        if payload.provides("state") or payload.provides("status_id"):
+            return self._queries.resolve_issue_state(payload.status_id, payload.state)
+        return None
+
+    async def _catalog_for(
+        self,
+        repository: dict[str, Any],
+        payload: CreateTaskInput | UpdateTaskInput,
+    ) -> GitHubIssueCatalog:
+        if not _metadata_requested(payload):
+            return GitHubIssueCatalog()
+        repository_id = str(repository["id"])
+        cached = self._catalog_cache.get(repository_id)
+        if cached is not None:
+            return cached
+        issue_types, issue_fields = await asyncio.gather(
+            self._transport.list_issue_types(repository),
+            self._transport.list_issue_fields(repository),
+        )
+        catalog = build_catalog(issue_types, issue_fields)
+        self._catalog_cache[repository_id] = catalog
+        return catalog
+
+    async def _write_issue_fields(
+        self,
+        repository: dict[str, Any],
+        issue_number: int,
+        catalog: GitHubIssueCatalog,
+        payload: CreateTaskInput | UpdateTaskInput,
+    ) -> bool:
+        values: list[dict[str, Any]] = []
+        clears: list[int] = []
+        self._collect_field(
+            values,
+            clears,
+            payload,
+            "priority",
+            catalog.priority.id if catalog.priority else None,
+            catalog.priority_option(payload.priority) if payload.priority else None,
+        )
+        self._collect_field(
+            values,
+            clears,
+            payload,
+            "start_date",
+            catalog.start_date.id if catalog.start_date else None,
+            _date_text(payload.start_date),
+        )
+        self._collect_field(
+            values,
+            clears,
+            payload,
+            "due_date",
+            catalog.due_date.id if catalog.due_date else None,
+            _date_text(payload.due_date),
+        )
+        changed = False
+        if values:
+            await self._transport.add_issue_field_values(repository, issue_number, values)
+            changed = True
+        for field_id in clears:
+            await self._transport.delete_issue_field_value(repository, issue_number, field_id)
+            changed = True
+        return changed
+
+    @staticmethod
+    def _collect_field(
+        values: list[dict[str, Any]],
+        clears: list[int],
+        payload: CreateTaskInput | UpdateTaskInput,
+        field_name: str,
+        field_id: int | None,
+        value: str | None,
+    ) -> None:
+        if isinstance(payload, UpdateTaskInput):
+            if not payload.provides(field_name):
+                return
+        elif value is None:
+            return
+        if field_id is None:
+            return
+        if value is None:
+            clears.append(field_id)
+            return
+        values.append({"field_id": field_id, "value": value})
 
     async def list_workspaces(self) -> list[Workspace]:
         user, organizations = await asyncio.gather(
@@ -375,3 +521,18 @@ class GitHubClient(BaseTaskTrackerAdapter):
                 source.issue_number,
                 target.issue_id,
             )
+
+
+_METADATA_FIELDS = ("priority", "work_type", "start_date", "due_date")
+
+
+def _metadata_requested(payload: CreateTaskInput | UpdateTaskInput) -> bool:
+    if isinstance(payload, UpdateTaskInput):
+        return any(payload.provides(name) for name in _METADATA_FIELDS)
+    return any(getattr(payload, name) is not None for name in _METADATA_FIELDS)
+
+
+def _date_text(value: datetime | None) -> str | None:
+    if value is None:
+        return None
+    return value.date().isoformat()

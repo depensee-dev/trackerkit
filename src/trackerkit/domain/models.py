@@ -1,12 +1,14 @@
 from datetime import datetime
+from typing import Self
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from trackerkit.domain.enums import (
     ConnectionErrorKind,
     Provider,
     RelationType,
     TaskPriority,
+    TaskState,
     TaskWorkType,
 )
 
@@ -54,12 +56,14 @@ class Task(BaseModel):
     description: str | None = None
     project_id: str | None = None
     status: Status | None = None
+    state: TaskState | None = None
     priority: TaskPriority | None = None
     work_type: TaskWorkType | None = None
     assignee: User | None = None
     reporter: User | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    start_date: datetime | None = None
     due_date: datetime | None = None
     url: str | None = None
 
@@ -91,20 +95,47 @@ class TaskQuery(BaseModel):
     limit: int | None = None
 
 
-class CreateTaskInput(BaseModel):
+class _TaskWrite(BaseModel):
+    """Shared task write fields.
+
+    On update, a field that was not passed is left unchanged. An explicit
+    ``None`` clears that field when the provider has somewhere to clear it.
+    ``status_id`` is a provider status. ``state`` is the portable open/done
+    value. One call carries only one of them.
+    """
+
+    @model_validator(mode="after")
+    def _one_status_value(self) -> Self:
+        if self.status_id is not None and self.state is not None:
+            raise ValueError("Pass either status_id or state.")
+        return self
+
+    def provides(self, field_name: str) -> bool:
+        return field_name in self.model_fields_set
+
+
+class CreateTaskInput(_TaskWrite):
     title: str
     description: str | None = None
     project_id: str | None = None
     assignee_id: str | None = None
     status_id: str | None = None
+    state: TaskState | None = None
+    priority: TaskPriority | None = None
+    work_type: TaskWorkType | None = None
+    start_date: datetime | None = None
     due_date: datetime | None = None
 
 
-class UpdateTaskInput(BaseModel):
+class UpdateTaskInput(_TaskWrite):
     title: str | None = None
     description: str | None = None
     assignee_id: str | None = None
     status_id: str | None = None
+    state: TaskState | None = None
+    priority: TaskPriority | None = None
+    work_type: TaskWorkType | None = None
+    start_date: datetime | None = None
     due_date: datetime | None = None
 
 

@@ -26,6 +26,13 @@ class TaskWorkType(str, Enum):
     REFACTOR = "refactor"
 
 
+class TaskState(str, Enum):
+    """Portable open/done state shared by every provider."""
+
+    OPEN = "open"
+    DONE = "done"
+
+
 class ConnectionErrorKind(str, Enum):
     """Stable taxonomy of connection-check failure reasons.
 

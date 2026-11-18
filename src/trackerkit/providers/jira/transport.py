@@ -105,8 +105,23 @@ class JiraTransport:
         issue = await self.get_issue(task_id, "key")
         return str(issue.key)
 
+    async def list_transitions(self, issue: Any) -> list[dict[str, Any]]:
+        return await self._run(self._get_client().transitions, issue)
+
     async def transition_issue(self, issue: Any, transition: str) -> None:
         await self._run(self._get_client().transition_issue, issue, transition)
+
+    async def list_comments(self, task_id: str) -> list[Any]:
+        return await self._run(self._get_client().comments, task_id)
+
+    async def add_comment(self, task_id: str, body: str) -> Any:
+        return await self._run(self._get_client().add_comment, task_id, body)
+
+    async def list_priorities(self) -> list[Any]:
+        return await self._run(self._get_client().priorities)
+
+    async def list_project_issue_types(self, project_id: str) -> list[Any]:
+        return await self._run(self._get_client().project_issue_types, project_id)
 
     async def delete_issue(self, issue: Any) -> None:
         await self._run(issue.delete)
@@ -189,4 +204,3 @@ class JiraTransport:
 
     async def delete_project(self, project_id: str) -> None:
         await self._run(self._get_client().delete_project, project_id)
-

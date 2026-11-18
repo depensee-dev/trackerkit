@@ -102,6 +102,24 @@ async def test_rate_limit_error_contains_retry_after() -> None:
 
 
 @pytest.mark.asyncio
+async def test_delete_issue_posts_graphql_delete_issue_mutation() -> None:
+    seen: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["path"] = request.url.path
+        seen["body"] = request.read().decode()
+        return httpx.Response(200, json={"data": {"deleteIssue": {"clientMutationId": None}}})
+
+    transport = _transport(handler)
+    await transport.delete_issue("I_kwDOA")
+    assert seen["path"] == "/graphql"
+    assert isinstance(seen["body"], str)
+    assert "deleteIssue" in seen["body"]
+    assert "I_kwDOA" in seen["body"]
+    await transport.close()
+
+
+@pytest.mark.asyncio
 async def test_permission_error_does_not_report_rate_limit_reset() -> None:
     transport = _transport(
         lambda request: httpx.Response(
@@ -115,6 +133,75 @@ async def test_permission_error_does_not_report_rate_limit_reset() -> None:
     assert diagnostic.message is not None
     assert "Resource not accessible" in diagnostic.message
     assert "rate limit" not in diagnostic.message.casefold()
+    await transport.close()
+
+
+@pytest.mark.asyncio
+async def test_organization_issue_fields_use_the_org_route() -> None:
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.path)
+        return httpx.Response(
+            403,
+            json={"message": "Resource not accessible by personal access token"},
+            headers={"X-RateLimit-Remaining": "4999"},
+        )
+
+    transport = _transport(handler)
+    fields = await transport.list_issue_fields(
+        {
+            "full_name": "depensee-dev/trackerkit",
+            "owner": {"login": "depensee-dev", "type": "Organization"},
+        }
+    )
+    assert fields == []
+    assert seen == ["/orgs/depensee-dev/issue-fields"]
+    await transport.close()
+
+
+@pytest.mark.asyncio
+async def test_user_owned_repository_reads_the_authenticated_users_fields() -> None:
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.path)
+        if request.url.path == "/user":
+            return httpx.Response(200, json={"login": "octocat", "id": 1})
+        return httpx.Response(
+            200,
+            json=[{"id": 2, "name": "Priority", "data_type": "single_select", "options": []}],
+        )
+
+    transport = _transport(handler)
+    fields = await transport.list_issue_fields(
+        {
+            "full_name": "octocat/project",
+            "owner": {"login": "octocat", "type": "User"},
+        }
+    )
+    assert [field["name"] for field in fields] == ["Priority"]
+    assert seen == ["/user", "/user/issue-fields"]
+    await transport.close()
+
+
+@pytest.mark.asyncio
+async def test_issue_types_are_read_from_the_repository() -> None:
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.path)
+        return httpx.Response(200, json=[{"id": 1, "name": "Bug", "is_enabled": True}])
+
+    transport = _transport(handler)
+    types = await transport.list_issue_types(
+        {
+            "full_name": "depensee-dev/trackerkit",
+            "owner": {"login": "depensee-dev", "type": "Organization"},
+        }
+    )
+    assert types[0]["name"] == "Bug"
+    assert seen == ["/repos/depensee-dev/trackerkit/issue-types"]
     await transport.close()
 
 

@@ -142,9 +142,10 @@ async with TrackerClient(
 ## Capability Scope
 - `workspaces`, `projects`, and `tasks` are implemented by Jira, Yandex Tracker, and GitHub
 - relation CRUD is implemented by all three providers
-- GitHub issue create/update is implemented; direct issue deletion is unsupported
+- GitHub issue create, update, and delete are implemented. Delete uses the GraphQL `deleteIssue` mutation and the issue `node_id`
+- Priority, work type, and start/due dates are written when the repository owner defines the matching issue type or issue field. A missing field is left unset
 - GitHub repository create/update/delete is unsupported in the current adapter
-- users and comments are present in the shared contract as future capabilities; provider adapters currently raise `ProviderCapabilityError`
+- `list_users` is still unsupported and raises `ProviderCapabilityError`. `list_comments` and `create_comment` are implemented for Jira, Yandex Tracker, and GitHub
 
 ## Relation Mapping
 - `RelationMappingConfig` is an optional runtime config for Jira/Yandex relation semantics

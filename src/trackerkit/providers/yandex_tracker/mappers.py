@@ -1,7 +1,8 @@
 from datetime import UTC, datetime
 from typing import Any
 
-from trackerkit.domain.models import Project, Status, Task, User, Workspace
+from trackerkit.domain.models import Comment, Project, Status, Task, User, Workspace
+from trackerkit.domain.task_state import task_state_for
 from trackerkit.providers.yandex_tracker.metadata import normalize_priority, normalize_work_type
 
 
@@ -27,21 +28,37 @@ class YandexTrackerMapper:
 
     def to_task(self, issue: Any) -> Task:
         queue = getattr(issue, "queue", None)
+        status = self._to_status(
+            getattr(issue, "status", None),
+            self._metadata_value(getattr(issue, "statusType", None)),
+        )
         return Task(
             id=str(issue.id),
             key=getattr(issue, "key", None),
             title=str(getattr(issue, "summary", None) or getattr(issue, "title", "")),
             description=getattr(issue, "description", None),
             project_id=getattr(queue, "key", None) if queue is not None else None,
-            status=self._to_status(getattr(issue, "status", None)),
+            status=status,
+            state=task_state_for(status.category, status.id) if status is not None else None,
             priority=normalize_priority(self._metadata_value(getattr(issue, "priority", None))),
             work_type=normalize_work_type(self._metadata_value(getattr(issue, "type", None))),
             assignee=self._to_user(getattr(issue, "assignee", None)),
             reporter=self._to_user(getattr(issue, "createdBy", None)),
             created_at=self._parse_datetime(getattr(issue, "createdAt", None)),
             updated_at=self._parse_datetime(getattr(issue, "updatedAt", None)),
+            start_date=self._parse_datetime(getattr(issue, "start", None)),
             due_date=self._parse_datetime(getattr(issue, "deadline", None)),
             url=getattr(issue, "self", None),
+        )
+
+    def to_comment(self, task_id: str, value: Any) -> Comment:
+        return Comment(
+            id=str(getattr(value, "id", "")),
+            task_id=task_id,
+            body=str(getattr(value, "text", None) or ""),
+            author=self._to_user(getattr(value, "createdBy", None)),
+            created_at=self._parse_datetime(getattr(value, "createdAt", None)),
+            updated_at=self._parse_datetime(getattr(value, "updatedAt", None)),
         )
 
     def _parse_datetime(self, value: Any) -> datetime | None:
@@ -109,11 +126,13 @@ class YandexTrackerMapper:
             email=data.get("email"),
         )
 
-    def _to_status(self, value: Any) -> Status | None:
+    def _to_status(self, value: Any, category: str | None = None) -> Status | None:
         if value is None:
             return None
+        data = self._short_value(value)
+        status_id = data.get("key") or data.get("id") or ""
         return Status(
-            id=str(getattr(value, "key", None) or getattr(value, "id", "")),
-            name=str(getattr(value, "display", None) or getattr(value, "key", "")),
-            category=None,
+            id=str(status_id),
+            name=str(data.get("display") or data.get("name") or status_id),
+            category=category,
         )

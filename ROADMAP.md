@@ -4,8 +4,7 @@
 The main product goal is to expose one stable task/project/relation contract
 while hiding provider SDK and HTTP details from the host backend (Depensee).
 
-**Last updated:** 2026-11-11 — GitHub Issues shipped in 0.4.0 and replaced
-the removed Asana adapter.
+**Last updated:** 2026-11-18 — task writes and GitHub issue deletion shipped in 0.4.2.
 
 Jira, Yandex Tracker, and GitHub are the maintained providers.
 
@@ -17,7 +16,8 @@ Engineering tasks (tests, perf, encapsulation): [`TECH_ROADMAP.md`](TECH_ROADMAP
 
 Released so far: **0.3.0** (stabilization), **0.3.1** and **0.3.2** (Yandex
 Tracker fixes), **0.4.0** (GitHub Issues; Asana removal), **0.4.1** (canonical
-priority and work type). Version numbers below are deliberately not assigned to future stages.
+priority and work type), **0.4.2** (task writes, comments, GitHub issue deletion).
+Version numbers below are deliberately not assigned to future stages.
 
 | Stage | Theme | Main deliverables |
 | --- | --- | --- |
@@ -63,7 +63,7 @@ Backlog below · **#22 Sync facade** — out of scope
 | 2 | Bulk create/update | Medium | Someday |
 | 3 | Task version / `if_match` / `ConflictError` | Low | Backlog |
 | 4 | Custom fields | **High** | Later |
-| 5 | Comments (list, create) | Medium | Later |
+| 5 | Comments (list, create) | Medium | Done |
 | 6 | Users API (search, by email, self) | **High** | Next |
 | 7 | Attachments | Low | Backlog |
 | 8 | Jira transitions API | **High** | Later |
@@ -117,7 +117,7 @@ handle API limits safely.
 
 - [ ] `Task.custom_fields` + `list_custom_fields(project)` (Jira, Yandex Tracker)
 - [ ] Jira `TaskTransitionCapability`: `list_transitions`, `apply_transition` (resolution / extra fields)
-- [ ] Comments: `list_comments`, `create_comment` (maintained providers)
+- [x] Comments: `list_comments`, `create_comment` (maintained providers)
 
 ### Someday — Scale and enterprise auth
 
@@ -137,7 +137,6 @@ handle API limits safely.
 - Configurable `RetryPolicy` (extends today’s Jira-only `max_retries`)
 - Attachments (upload / download / list)
 - Yandex `delete_task` policy (API exists; adapter currently rejects)
-- GitHub issue deletion through a separate explicitly permissioned workflow
 - Jira agile contract (sprints / epics / boards), capability-gated
 - VCR / respx snapshot tests
 
@@ -147,7 +146,7 @@ handle API limits safely.
 
 ---
 
-## Current status (0.4.1)
+## Current status (0.4.2)
 
 ### Done
 
@@ -155,7 +154,7 @@ handle API limits safely.
 - Typed auth configs (`JiraAuthConfig`, `YandexTrackerAuthConfig`, `GitHubAuthConfig`).
 - Shared domain models: workspaces, projects, tasks, statuses, users, comments, relations.
 - Canonical optional task priority and work type with exact per-provider mappings for Jira, Yandex Tracker, and GitHub.
-- Task CRUD + assignee on read/write where supported; documented provider capability errors for unsupported deletion and due dates.
+- Task CRUD + assignee on read/write where supported; documented provider capability errors for unsupported deletion. Canonical priority, work type, and dates are written where the provider has a native field.
 - Jira, Yandex Tracker, and GitHub relation CRUD (`relates`, `blocks`, `contains`).
 - GitHub repository-backed projects, issue read/create/update/count, stable task/relation handles, pagination, pull-request filtering, and bounded concurrency.
 - Configurable Jira relation mapping (`RelationMappingConfig`).
@@ -165,7 +164,7 @@ handle API limits safely.
 
 ### Partially done / documented gaps
 
-- **Users / comments:** models and contracts exist; adapters raise `ProviderCapabilityError`.
+- **Users:** models and contracts exist; adapters raise `ProviderCapabilityError`. Comments can be listed and created.
 - **Capability matrix:** partial table in `docs/relations.md` (relations/users/comments only).
 - **Rate limits:** Jira SDK `max_retries` and GitHub bounded concurrency/error details exist; no shared limiter or automatic `Retry-After` policy.
 - **GitHub relation scale:** native reads are per issue; bulk/GraphQL loading remains future work.

@@ -7,6 +7,10 @@ class GitHubNotFoundError(ProviderError):
     pass
 
 
+class GitHubForbiddenError(ProviderError):
+    """The token cannot see this resource. Distinct from a rate limit."""
+
+
 def raise_github_error(response: httpx.Response, method: str, path: str) -> None:
     try:
         payload = response.json()
@@ -15,6 +19,7 @@ def raise_github_error(response: httpx.Response, method: str, path: str) -> None
     message = payload.get("message") if isinstance(payload, dict) else None
     detail = message or response.text[:500] or "GitHub API request failed."
     error_message = f"GitHub API {method} {path} returned {response.status_code}: {detail}"
+    is_rate_limit = False
     if response.status_code in {403, 429}:
         retry_after = response.headers.get("retry-after")
         reset = response.headers.get("x-ratelimit-reset")
@@ -33,4 +38,6 @@ def raise_github_error(response: httpx.Response, method: str, path: str) -> None
         raise AuthenticationError(error_message)
     if response.status_code == 404:
         raise GitHubNotFoundError(error_message)
+    if response.status_code == 403 and not is_rate_limit:
+        raise GitHubForbiddenError(error_message)
     raise ProviderError(error_message)

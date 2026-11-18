@@ -11,6 +11,19 @@ mentioned in `0.3.0` was removed in `0.4.0`.
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-18
+
+### Added
+- Portable `Task.state` (`open` or `done`) on read and on task create/update. `status_id` remains the exact provider status, and one call accepts only one of the two.
+- Optional `start_date` beside `due_date`. Yandex Tracker writes `start`. GitHub writes a date issue field named `Start date` when that field exists. Jira has no stable start field, so the value stays unset.
+- Canonical `priority` and `work_type` on task create/update. Each provider writes one mapped value when the target project defines it.
+- `list_comments` and `create_comment` for Jira, Yandex Tracker, and GitHub.
+- GitHub `delete_task` uses the documented GraphQL `deleteIssue` mutation and the issue `node_id`.
+
+### Changed
+- An omitted update field is left unchanged. An explicit `null` clears assignee and dates where the provider can clear them.
+- GitHub no longer rejects `due_date` or `start_date`. When the owner has no `Due date` or `Target date` field, the returned task keeps that value unset.
+
 ## [0.4.1] - 2026-11-11
 
 ### Added

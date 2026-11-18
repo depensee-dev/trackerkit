@@ -3,7 +3,8 @@ from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlparse
 
-from trackerkit.domain.models import Project, Status, Task, User, Workspace
+from trackerkit.domain.models import Comment, Project, Status, Task, User, Workspace
+from trackerkit.domain.task_state import task_state_for
 from trackerkit.providers.jira.metadata import normalize_priority, normalize_work_type
 
 
@@ -49,13 +50,15 @@ class JiraMapper:
     def to_task(self, issue: Any) -> Task:
         fields = issue.fields
         project = getattr(fields, "project", None)
+        status = self._to_status(getattr(fields, "status", None))
         return Task(
             id=str(issue.id),
             key=getattr(issue, "key", None),
             title=str(getattr(fields, "summary", "")),
             description=self._extract_description(getattr(fields, "description", None)),
             project_id=str(project.id) if project is not None else None,
-            status=self._to_status(getattr(fields, "status", None)),
+            status=status,
+            state=task_state_for(status.category, status.id) if status is not None else None,
             priority=normalize_priority(getattr(getattr(fields, "priority", None), "name", None)),
             work_type=normalize_work_type(
                 getattr(getattr(fields, "issuetype", None), "name", None)
@@ -66,6 +69,16 @@ class JiraMapper:
             updated_at=self._parse_datetime(getattr(fields, "updated", None)),
             due_date=self._parse_datetime(getattr(fields, "duedate", None)),
             url=issue.permalink(),
+        )
+
+    def to_comment(self, task_id: str, value: Any) -> Comment:
+        return Comment(
+            id=str(value.id),
+            task_id=task_id,
+            body=self._extract_description(getattr(value, "body", None)) or "",
+            author=self._to_user(getattr(value, "author", None)),
+            created_at=self._parse_datetime(getattr(value, "created", None)),
+            updated_at=self._parse_datetime(getattr(value, "updated", None)),
         )
 
     def _parse_datetime(self, value: Any) -> datetime | None:

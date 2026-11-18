@@ -23,7 +23,7 @@ pip install trackerkit
 Install from a Git tag:
 
 ```bash
-pip install "git+https://github.com/depensee-dev/trackerkit.git@v0.4.1"
+pip install "git+https://github.com/depensee-dev/trackerkit.git@v0.4.2"
 ```
 
 Install from the `main` branch:
@@ -62,10 +62,13 @@ pip install .
 - provider auth configs;
 - real provider adapters for `workspaces`, `projects`, and `tasks`;
 - relation CRUD for all three providers;
-- users and comments are modeled in the shared contract, but provider adapters currently report them as unsupported capabilities;
+- users are modeled in the shared contract, but provider adapters still report `list_users` as unsupported; comments can be listed and created;
 - client factory and explicit HTTP resource cleanup.
 
-GitHub supports issue create/update but not direct issue deletion through this adapter.
+GitHub supports issue create, update, and delete. Delete uses the GraphQL
+`deleteIssue` mutation. Priority, work type, and
+start/due dates are written only when the repository owner has a matching
+issue type or issue field; otherwise the returned task leaves that value unset.
 GitHub project write operations (repository create/update/delete) currently raise
 `ProviderCapabilityError`.
 
@@ -177,7 +180,7 @@ client = TrackerClient(
 ## Examples
 - `examples/jira_example.py` - Jira auth, projects flow, task flow, and relation flow.
 - `examples/yandex_example.py` - Yandex Tracker auth, projects flow, task flow, and relation flow.
-- `examples/github_example.py` - read-only GitHub auth, repository issue, and relation inspection. Requires `GITHUB_REPOSITORY`; never modifies GitHub data.
+- `examples/github_example.py` - GitHub auth, four tasks, task update, three relations, then cleanup. Requires `GITHUB_REPOSITORY`. Same pause-after-each-step flow as the Jira example. Pauses use `input()`.
 
 ## Notes
 `src` is configured as the import root for the repository.
@@ -209,7 +212,7 @@ They are mapped by functional role in the workflow, and some shared entities are
 - `Yandex Tracker`: direct issue deletion is unsupported by the adapter; close/archive semantics remain provider-specific.
 - `GitHub`: shared `Project` maps to repository because an issue belongs to exactly one repository. GitHub Projects has many-to-many membership and is not equivalent.
 - `GitHub`: shared `Task` maps to issue. Task IDs are opaque versioned handles containing the global issue ID, repository ID, and issue number; display keys use `owner/repo#number`.
-- `GitHub`: direct issue deletion and repository write operations are unsupported by the current adapter.
+- `GitHub`: issue deletion uses the GraphQL `deleteIssue` mutation. Repository create/update/delete stays unsupported.
 - `Jira`: shared `Relation` maps to issue links for `relates` and `blocks`, and to hierarchy for default `contains`.
 - `Yandex Tracker`: shared `Relation` maps to native issue links; provider-native link types cover both dependency-style and hierarchy-style relations.
 - `GitHub`: shared `Relation` maps to native related issues, dependencies, and sub-issues.

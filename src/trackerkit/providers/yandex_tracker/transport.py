@@ -80,9 +80,7 @@ class YandexTrackerTransport:
         # Uses Tracker's dedicated ``/issues/_count`` endpoint (a single cheap
         # request that returns just the number), instead of paging the issues.
         def _count() -> int:
-            return int(
-                self._get_client().issues.find(query, count_only=True, **kwargs)
-            )
+            return int(self._get_client().issues.find(query, count_only=True, **kwargs))
 
         return await self._run(_count)
 
@@ -94,6 +92,31 @@ class YandexTrackerTransport:
 
     async def delete_issue(self, issue: Any) -> None:
         await self._run(issue.delete)
+
+    async def list_comments(self, issue: Any) -> list[Any]:
+        return await self._run(lambda: list(issue.comments.get_all()))
+
+    async def create_comment(self, issue: Any, text: str) -> Any:
+        return await self._run(issue.comments.create, text=text)
+
+    async def list_transitions(self, issue: Any) -> list[Any]:
+        return await self._run(lambda: list(issue.transitions.get_all()))
+
+    async def execute_transition(self, issue: Any, transition: Any) -> None:
+        await self._run(issue.transitions.execute, transition)
+
+    async def list_priorities(self) -> list[Any]:
+        return await self._run(lambda: list(self._get_client().priorities.get_all()))
+
+    async def list_queue_issue_types(self, queue_key: str) -> list[Any]:
+        def _load() -> list[Any]:
+            queue = self._get_client().queues.get(queue_key)
+            issue_types = queue.issuetypes
+            if isinstance(issue_types, list):
+                return issue_types
+            return list(issue_types)
+
+        return await self._run(_load)
 
     async def get_issue_links(self, issue: Any) -> list[Any]:
         return await self._run(issue.links.get_all)
@@ -141,4 +164,3 @@ class YandexTrackerTransport:
 
     async def delete_queue(self, queue: Any) -> None:
         await self._run(queue.delete)
-

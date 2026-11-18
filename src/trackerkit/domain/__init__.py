@@ -3,6 +3,7 @@ from trackerkit.domain.enums import (
     Provider,
     RelationType,
     TaskPriority,
+    TaskState,
     TaskWorkType,
 )
 from trackerkit.domain.errors import (
@@ -64,6 +65,7 @@ __all__ = [
     "Task",
     "TaskPriority",
     "TaskQuery",
+    "TaskState",
     "TaskWorkType",
     "TrackerClientError",
     "TrackerKitError",

@@ -1,8 +1,10 @@
 from datetime import UTC, datetime
 from typing import Any
 
+from trackerkit.domain.enums import TaskState
 from trackerkit.domain.errors import ProviderCapabilityError
 from trackerkit.domain.models import TaskQuery
+from trackerkit.providers.github.metadata import issue_state
 
 
 class GitHubQueryBuilder:
@@ -32,6 +34,10 @@ class GitHubQueryBuilder:
             updated_since = self._format_datetime(effective_query.updated_since)
             clauses.append(f"updated:>={updated_since}")
         return " ".join(clauses)
+
+    def resolve_issue_state(self, status_id: str | None, state: TaskState | None) -> str | None:
+        self.validate_status(status_id)
+        return issue_state(state, status_id)
 
     @staticmethod
     def validate_status(status_id: str | None) -> None:
